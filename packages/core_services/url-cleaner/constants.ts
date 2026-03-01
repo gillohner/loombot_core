@@ -186,10 +186,10 @@ export const URL_CLEANER_DATASET_SCHEMAS: DatasetSchemas = {
 					enabled: true,
 				},
 				{
-					name: "YouTube to Piped",
+					name: "YouTube to Invidious",
 					pattern:
 						"^https?://(?:(?:www\\.)?youtube\\.com/(?:watch\\?v=|shorts/|embed/)|youtu\\.be/)([^&?/]+).*$",
-					replacement: "https://piped.video/watch?v=$1",
+					replacement: "https://yewtu.be/watch?v=$1",
 					enabled: true,
 				},
 				{
@@ -409,10 +409,10 @@ export const DEFAULT_ALT_FRONTENDS: AltFrontendsDataset = {
 			enabled: true,
 		},
 		{
-			name: "YouTube → Piped",
+			name: "YouTube → Invidious",
 			pattern:
 				"^https?://(?:(?:www\\.)?youtube\\.com/(?:watch\\?v=|shorts/|embed/)|youtu\\.be/)([^&?/]+).*$",
-			replacement: "https://piped.video/watch?v=$1",
+			replacement: "https://yewtu.be/watch?v=$1",
 			enabled: true,
 		},
 		{
