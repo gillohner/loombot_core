@@ -32,7 +32,9 @@ Deno.test("publishCommands sets both public and admin scopes", async () => {
 	const adminCall = calls.find((c) => c.scope === "chat_administrators");
 	if (!publicCall) throw new Error("Expected public chat scope commands to be set");
 	if (!adminCall) throw new Error("Expected admin chat_administrators scope commands to be set");
-	if (!adminCall.commands.includes("setconfig")) {
-		throw new Error("Admin commands should include setconfig");
+	for (const cmd of ["setconfig", "updateconfig", "showconfig", "resetconfig"]) {
+		if (!adminCall.commands.includes(cmd)) {
+			throw new Error(`Admin commands should include ${cmd}`);
+		}
 	}
 });

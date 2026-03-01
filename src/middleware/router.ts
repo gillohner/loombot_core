@@ -13,7 +13,7 @@ import { pubkyWriter } from "@core/pubky/writer.ts";
 
 // Non-admin commands exposed to users (dynamic services appended later via snapshot)
 const CORE_PUBLIC_COMMANDS: string[] = ["start"]; // plus service commands resolved dynamically
-const CORE_ADMIN_ONLY: string[] = ["setconfig", "updateconfig"]; // maintenance/config operations
+const CORE_ADMIN_ONLY: string[] = ["setconfig", "updateconfig", "showconfig", "resetconfig"]; // maintenance/config operations
 
 function buildCommandLists(allServiceCommands: string[]) {
 	// De-duplicate dynamic commands against core lists
@@ -154,6 +154,67 @@ export function buildMiddleware() {
 					await ctx.reply("Config re-fetched and snapshot updated; commands refreshed.");
 				} catch (err) {
 					await ctx.reply(`Update failed: ${(err as Error).message}`);
+				}
+				return;
+			}
+
+			if (command === "showconfig") {
+				if (!(await userIsAdmin(ctx))) {
+					await ctx.reply("Admin only.");
+					return;
+				}
+				const existingConfig = getChatConfig(chatId);
+				if (!existingConfig) {
+					await ctx.reply(
+						`No custom config set for this chat.\nUsing default: <code>${CONFIG.defaultTemplateId}</code>`,
+						{ parse_mode: "HTML" },
+					);
+					return;
+				}
+				try {
+					const cfg = JSON.parse(existingConfig.config_json);
+					const services = (cfg.services ?? []).map(
+						(s: { name?: string; command?: string }) => s.command ?? s.name ?? "?",
+					);
+					const listeners = (cfg.listeners ?? []).map(
+						(l: { name?: string }) => l.name ?? "?",
+					);
+					const lines = [
+						`<b>Config:</b> <code>${existingConfig.config_id}</code>`,
+						`<b>Updated:</b> ${new Date(existingConfig.updated_at).toISOString()}`,
+					];
+					if (services.length > 0) {
+						lines.push(`<b>Services:</b> ${services.map((s: string) => `/${s}`).join(", ")}`);
+					}
+					if (listeners.length > 0) {
+						lines.push(`<b>Listeners:</b> ${listeners.join(", ")}`);
+					}
+					await ctx.reply(lines.join("\n"), { parse_mode: "HTML" });
+				} catch {
+					await ctx.reply(
+						`Config ID: <code>${existingConfig.config_id}</code>\n(Could not parse config details)`,
+						{ parse_mode: "HTML" },
+					);
+				}
+				return;
+			}
+			if (command === "resetconfig") {
+				if (!(await userIsAdmin(ctx))) {
+					await ctx.reply("Admin only.");
+					return;
+				}
+				try {
+					const defaultId = CONFIG.defaultTemplateId;
+					const cfg = await fetchPubkyConfig(defaultId);
+					setChatConfig(chatId, defaultId, cfg);
+					await buildSnapshot(chatId, { force: true });
+					await publishCommands(ctx, chatId);
+					await ctx.reply(
+						`Config reset to default: <code>${defaultId}</code>. Commands refreshed.`,
+						{ parse_mode: "HTML" },
+					);
+				} catch (err) {
+					await ctx.reply(`Reset failed: ${(err as Error).message}`);
 				}
 				return;
 			}
