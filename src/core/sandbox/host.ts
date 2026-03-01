@@ -42,6 +42,8 @@ export class SandboxHost {
 			"run",
 			"--quiet",
 			"--no-remote", // deny fetching remote modules (dynamic import of URLs will fail)
+			"--no-config", // prevent inheriting project's deno.json (import map, lock, etc.)
+			"--no-lock", // prevent lock file validation (sandbox bundles aren't in project lock)
 		];
 
 		// All services are bundled to temp files in /tmp, so they need read access.
