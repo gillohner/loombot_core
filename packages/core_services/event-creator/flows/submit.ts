@@ -39,9 +39,6 @@ export function handleSubmit(ev: CallbackEvent) {
 				location_type: (st.location.location_type ?? "PHYSICAL") as "PHYSICAL" | "ONLINE",
 				description: st.location.address,
 				structured_data: st.location.structured_data,
-				geo: st.location.lat && st.location.lng
-					? `${st.location.lat};${st.location.lng}`
-					: undefined,
 			},
 		]
 		: undefined;

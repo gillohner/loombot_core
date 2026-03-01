@@ -59,8 +59,7 @@ export interface Location {
 	name: string;
 	location_type: LocationType;
 	description?: string;
-	structured_data?: string; // URL for online meetings
-	geo?: string; // "lat;lon" format
+	structured_data?: string; // OSM URL for physical, meeting URL for online
 }
 
 export interface PubkyAppEvent {
