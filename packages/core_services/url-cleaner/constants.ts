@@ -176,7 +176,7 @@ export const URL_CLEANER_DATASET_SCHEMAS: DatasetSchemas = {
 		description: "Alternative frontend mappings (e.g., Twitter → Xcancel, YouTube → Invidious)",
 		required: false,
 		example: {
-			version: "1.0.0",
+			version: "1.1.0",
 			description: "Default alternative frontends",
 			mappings: [
 				{
@@ -186,28 +186,16 @@ export const URL_CLEANER_DATASET_SCHEMAS: DatasetSchemas = {
 					enabled: true,
 				},
 				{
-					name: "YouTube to Invidious",
+					name: "YouTube to Piped",
 					pattern:
 						"^https?://(?:(?:www\\.)?youtube\\.com/(?:watch\\?v=|shorts/|embed/)|youtu\\.be/)([^&?/]+).*$",
-					replacement: "https://yewtu.be/watch?v=$1",
+					replacement: "https://piped.video/watch?v=$1",
 					enabled: true,
 				},
 				{
 					name: "Reddit to Redlib",
 					pattern: "^https?://(?:www\\.|old\\.)?reddit\\.com/(.+)$",
-					replacement: "https://redlib.seasi.dev/$1",
-					enabled: true,
-				},
-				{
-					name: "Instagram to Proxigram",
-					pattern: "^https?://(?:www\\.)?instagram\\.com/(.+)$",
-					replacement: "https://proxigram.lunar.icu/$1",
-					enabled: true,
-				},
-				{
-					name: "TikTok to ProxiTok",
-					pattern: "^https?://(?:www\\.)?tiktok\\.com/(.+)$",
-					replacement: "https://proxitok.pabloferreiro.es/$1",
+					replacement: "https://l.opnxng.com/$1",
 					enabled: true,
 				},
 			],
@@ -411,7 +399,7 @@ export const EXTRA_TRACKING_PARAMS: Record<string, string[]> = {
 };
 
 export const DEFAULT_ALT_FRONTENDS: AltFrontendsDataset = {
-	version: "1.0.0",
+	version: "1.1.0",
 	description: "Built-in alternative frontend mappings",
 	mappings: [
 		{
@@ -421,31 +409,19 @@ export const DEFAULT_ALT_FRONTENDS: AltFrontendsDataset = {
 			enabled: true,
 		},
 		{
-			name: "YouTube → Invidious",
+			name: "YouTube → Piped",
 			pattern:
 				"^https?://(?:(?:www\\.)?youtube\\.com/(?:watch\\?v=|shorts/|embed/)|youtu\\.be/)([^&?/]+).*$",
-			replacement: "https://yewtu.be/watch?v=$1",
+			replacement: "https://piped.video/watch?v=$1",
 			enabled: true,
 		},
 		{
 			name: "Reddit → Redlib",
 			pattern: "^https?://(?:www\\.|old\\.)?reddit\\.com/(.+)$",
-			replacement: "https://redlib.catsarch.com/$1",
+			replacement: "https://l.opnxng.com/$1",
 			enabled: true,
 		},
-		{
-			name: "Instagram → Proxigram",
-			pattern: "^https?://(?:www\\.)?instagram\\.com/(.+)$",
-			replacement: "https://proxigram.lunar.icu/$1",
-			enabled: true,
-		},
-		{
-			name: "TikTok → ProxiTok",
-			pattern: "^https?://(?:www\\.)?tiktok\\.com/(.+)$",
-			replacement: "https://proxitok.pabloferreiro.es/$1",
-			enabled: true,
-		},
-		{
+{
 			name: "Medium → Scribe",
 			pattern: "^https?://(?:www\\.)?medium\\.com/(.+)$",
 			replacement: "https://scribe.rip/$1",

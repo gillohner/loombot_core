@@ -167,8 +167,8 @@ Deno.test("should strip YouTube si tracking parameter", () => {
 		assertStringIncludes(result.text!, "Cleaned");
 		// Should not contain the si param in the cleaned URL
 		assertEquals(result.text!.includes("si="), false);
-		// Should also have the Invidious alt-frontend
-		assertStringIncludes(result.text!, "Invidious");
+		// Should also have the Piped alt-frontend
+		assertStringIncludes(result.text!, "Piped");
 	}
 });
 
