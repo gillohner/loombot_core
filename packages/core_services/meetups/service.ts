@@ -396,7 +396,7 @@ function expandOccurrences(
 
 	for (const date of candidates) {
 		if (date < windowStart || date > windowEnd) continue;
-		const isoStr = date.toISOString().replace("Z", "");
+		const isoStr = date.toISOString().replace(/\.\d{3}Z$/, "");
 		const key = normalizeDateTime(isoStr);
 		if (excludedDates.has(key)) continue;
 		if (seen.has(key)) continue;
