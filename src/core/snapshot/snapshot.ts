@@ -5,7 +5,6 @@ import { bundleAndHash } from "@core/util/bundle.ts";
 import {
 	deleteBundle,
 	getChatConfig,
-	getServiceBundle,
 	listAllBundleHashes,
 	listReferencedBundleHashes,
 	loadSnapshotByConfigHash,
