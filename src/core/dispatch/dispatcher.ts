@@ -297,7 +297,15 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 						version: after?.version,
 					});
 				}
-				return { response: res.value ?? { kind: "none" } };
+				// If the active flow returned a real response, use it.
+				// If it returned "none", fall through to listeners so they
+				// can still process the message (e.g. url-cleaner, triggerwords).
+				if (res.value && res.value.kind !== "none") {
+					return { response: res.value };
+				}
+				log.debug("dispatch.flow.passthrough", {
+					serviceId: route.serviceId,
+				});
 			}
 		}
 		// Fallback to listeners
