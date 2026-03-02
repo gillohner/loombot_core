@@ -228,7 +228,11 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 			listenerCount: snapshot.listeners.length,
 			textPreview: msgText?.slice(0, 50),
 		});
-		const active = getActiveFlow(evt.ctx.chatId, evt.ctx.userId);
+		// Skip active-flow interception for new_chat_members events so listener
+		// services (e.g. new-member welcome) always get a chance to respond.
+		const hasNewMembers = !!(evt.message as { new_chat_members?: unknown[] } | undefined)
+			?.new_chat_members;
+		const active = hasNewMembers ? null : getActiveFlow(evt.ctx.chatId, evt.ctx.userId);
 		if (active) {
 			log.debug("dispatch.message.active_flow", {
 				chatId: evt.ctx.chatId,

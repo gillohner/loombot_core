@@ -117,6 +117,12 @@ const TEMPLATES: Record<string, PubkyBotConfigTemplate> = {
 		],
 		listeners: [
 			{
+				name: "New Member",
+				command: "new_member",
+				kind: "listener",
+				entry: "./packages/core_services/new-member/service.ts",
+			},
+			{
 				name: "Trigger Words",
 				command: "triggerwords",
 				kind: "listener",
