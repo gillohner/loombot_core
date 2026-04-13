@@ -119,14 +119,18 @@ packages/
 
 ### Services
 
-Services are isolated units of bot functionality. Four kinds:
+Services are isolated units of bot functionality. Three kinds:
 
-| Kind               | Description                     | State                            |
-| ------------------ | ------------------------------- | -------------------------------- |
-| `single_command`   | One-shot response               | None                             |
-| `command_flow`     | Multi-step conversation         | Persistent until `state.clear()` |
-| `listener`         | Responds to any message         | None                             |
-| `periodic_command` | Scheduled (not yet implemented) | N/A                              |
+| Kind             | Description             | State                            |
+| ---------------- | ----------------------- | -------------------------------- |
+| `single_command` | One-shot response       | None                             |
+| `command_flow`   | Multi-step conversation | Persistent until `state.clear()` |
+| `listener`       | Responds to any message | None                             |
+
+Periodic broadcasts (meetups) are driven by the host-side scheduler in
+`src/core/scheduler/scheduler.ts`, not by a service kind — the scheduler reads each chat's merged
+meetups config off the snapshot and fires the broadcast directly. Per-chat periodic settings live
+under `chat_feature_overrides.data.periodic`.
 
 Services are defined with `defineService()` from the SDK and have handlers for `command`,
 `callback`, and `message` events. Network access: declare `net: ["domain.com"]` in

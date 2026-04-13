@@ -109,6 +109,103 @@ export function listAllChatIds(): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Per-chat feature overrides
+// ---------------------------------------------------------------------------
+// Layered on top of config.yaml. `enabled = NULL` means "inherit the operator
+// default for this chat type". `data` is a feature-specific JSON blob (e.g.
+// selected calendar ids for meetups, override welcome text for new_member).
+
+export interface ChatFeatureOverride {
+	chat_id: string;
+	feature_id: string;
+	enabled: boolean | null;
+	data: Record<string, unknown>;
+	updated_at: number;
+}
+
+export function getChatFeatureOverrides(chatId: string): ChatFeatureOverride[] {
+	const database = ensureDb();
+	const rows = database.query<[string, string, number | null, string, number]>(
+		`SELECT chat_id, feature_id, enabled, data, updated_at
+		 FROM chat_feature_overrides WHERE chat_id = ?`,
+		[chatId],
+	);
+	return rows.map(([cid, fid, en, dataJson, updated]) => ({
+		chat_id: cid,
+		feature_id: fid,
+		enabled: en === null ? null : en === 1,
+		data: parseJsonSafe(dataJson),
+		updated_at: updated,
+	}));
+}
+
+export function getChatFeatureOverride(
+	chatId: string,
+	featureId: string,
+): ChatFeatureOverride | undefined {
+	const database = ensureDb();
+	const row = database
+		.query<[string, string, number | null, string, number]>(
+			`SELECT chat_id, feature_id, enabled, data, updated_at
+			 FROM chat_feature_overrides WHERE chat_id = ? AND feature_id = ?`,
+			[chatId, featureId],
+		)
+		.at(0);
+	if (!row) return undefined;
+	const [cid, fid, en, dataJson, updated] = row;
+	return {
+		chat_id: cid,
+		feature_id: fid,
+		enabled: en === null ? null : en === 1,
+		data: parseJsonSafe(dataJson),
+		updated_at: updated,
+	};
+}
+
+export function setChatFeatureOverride(
+	chatId: string,
+	featureId: string,
+	patch: { enabled?: boolean | null; data?: Record<string, unknown> },
+): void {
+	const database = ensureDb();
+	const existing = getChatFeatureOverride(chatId, featureId);
+	const mergedEnabled = patch.enabled === undefined ? (existing?.enabled ?? null) : patch.enabled;
+	const mergedData = { ...(existing?.data ?? {}), ...(patch.data ?? {}) };
+	const enabledInt = mergedEnabled === null ? null : mergedEnabled ? 1 : 0;
+	database.query(
+		`INSERT INTO chat_feature_overrides (chat_id, feature_id, enabled, data, updated_at)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(chat_id, feature_id) DO UPDATE SET
+		   enabled = excluded.enabled,
+		   data = excluded.data,
+		   updated_at = excluded.updated_at`,
+		[chatId, featureId, enabledInt, JSON.stringify(mergedData), Date.now()],
+	);
+}
+
+export function clearChatFeatureOverride(chatId: string, featureId: string): void {
+	const database = ensureDb();
+	database.query(
+		`DELETE FROM chat_feature_overrides WHERE chat_id = ? AND feature_id = ?`,
+		[chatId, featureId],
+	);
+}
+
+export function clearAllChatFeatureOverrides(chatId: string): void {
+	const database = ensureDb();
+	database.query(`DELETE FROM chat_feature_overrides WHERE chat_id = ?`, [chatId]);
+}
+
+function parseJsonSafe(s: string): Record<string, unknown> {
+	try {
+		const v = JSON.parse(s);
+		return v && typeof v === "object" ? v as Record<string, unknown> : {};
+	} catch {
+		return {};
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Snapshots keyed by config hash (primary reuse mechanism)
 // ---------------------------------------------------------------------------
 export function saveSnapshotByConfigHash(configHash: string, snapshot: RoutingSnapshot): void {
@@ -239,6 +336,61 @@ export function closeDb(): void {
 		db.close();
 		db = null;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Periodic pin state (scheduler)
+// ---------------------------------------------------------------------------
+// Per-chat: which message was pinned by the last periodic broadcast (so the
+// next fire can unpin it), and the time-slot we last fired in (so a restart
+// within the same slot doesn't double-send).
+
+export function getPeriodicPinnedMessage(chatId: string): number | null {
+	const database = ensureDb();
+	const row = database
+		.query<[number | null]>(
+			`SELECT pinned_message_id FROM periodic_pin_state WHERE chat_id = ?`,
+			[chatId],
+		)
+		.at(0);
+	if (!row) return null;
+	return row[0] ?? null;
+}
+
+export function setPeriodicPinnedMessage(chatId: string, messageId: number | null): void {
+	const database = ensureDb();
+	database.query(
+		`INSERT INTO periodic_pin_state (chat_id, pinned_message_id, updated_at)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(chat_id) DO UPDATE SET
+		   pinned_message_id = excluded.pinned_message_id,
+		   updated_at = excluded.updated_at`,
+		[chatId, messageId, Date.now()],
+	);
+}
+
+export function getPeriodicLastFired(chatId: string): string | null {
+	const database = ensureDb();
+	const row = database
+		.query<[string | null]>(
+			`SELECT last_fired_slot FROM periodic_pin_state WHERE chat_id = ?`,
+			[chatId],
+		)
+		.at(0);
+	if (!row) return null;
+	return row[0] ?? null;
+}
+
+export function setPeriodicLastFired(chatId: string, slot: string): void {
+	const database = ensureDb();
+	database.query(
+		`INSERT INTO periodic_pin_state (chat_id, last_fired_slot, updated_at)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(chat_id) DO UPDATE SET
+		   last_fired_slot = excluded.last_fired_slot,
+		   updated_at = excluded.updated_at`,
+		[chatId, slot, Date.now()],
+	);
 }
 
 // ---------------------------------------------------------------------------

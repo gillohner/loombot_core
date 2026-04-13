@@ -96,6 +96,35 @@ export const migrations: Migration[] = [
 			}
 		},
 	},
+	{
+		id: 5,
+		name: "add_chat_feature_overrides",
+		up: (db: DB) => {
+			db.execute(`CREATE TABLE IF NOT EXISTS chat_feature_overrides (
+				chat_id TEXT NOT NULL,
+				feature_id TEXT NOT NULL,
+				enabled INTEGER,
+				data TEXT NOT NULL DEFAULT '{}',
+				updated_at INTEGER NOT NULL,
+				PRIMARY KEY (chat_id, feature_id)
+			);`);
+		},
+	},
+	{
+		id: 6,
+		name: "add_periodic_pin_state",
+		up: (db: DB) => {
+			// Tracks the most recent pinned periodic broadcast message per chat
+			// (so the next broadcast can unpin it) and the last-fired time slot
+			// (so a restart within the same slot doesn't double-fire).
+			db.execute(`CREATE TABLE IF NOT EXISTS periodic_pin_state (
+				chat_id TEXT PRIMARY KEY,
+				pinned_message_id INTEGER,
+				last_fired_slot TEXT,
+				updated_at INTEGER NOT NULL
+			);`);
+		},
+	},
 ];
 
 export function runMigrations(db: DB): void {

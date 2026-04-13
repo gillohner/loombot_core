@@ -4,7 +4,7 @@ import type { CallbackEvent, CommandEvent, MessageEvent } from "./events.ts";
 import type { ServiceResponse } from "./responses/types.ts";
 import type { DatasetSchemas, JSONSchema } from "./schema.ts";
 
-export type ServiceKind = "single_command" | "command_flow" | "listener" | "periodic_command";
+export type ServiceKind = "single_command" | "command_flow" | "listener";
 
 export interface ServiceDefinition {
 	id?: string; // optional - injected if omitted
