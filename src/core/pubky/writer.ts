@@ -31,6 +31,7 @@ export interface QueueWriteParams {
 	userId: string;
 	chatId: string;
 	onApprovalMessage?: string;
+	onRejectionMessage?: string;
 	/** Telegram username (without @) for admin display */
 	userName?: string;
 	/** Telegram display name for admin display */
@@ -131,6 +132,13 @@ class PubkyWriter {
 	}
 
 	/**
+	 * Get the configured admin group chat id (where approval requests are posted).
+	 */
+	getAdminGroup(): string | undefined {
+		return this.config.adminGroup;
+	}
+
+	/**
 	 * Set the bot API for sending messages (can be called after initialize)
 	 */
 	setBotApi(api: BotApi): void {
@@ -158,6 +166,9 @@ class PubkyWriter {
 			status: "pending",
 			onApproval: params.onApprovalMessage
 				? { chatId: params.chatId, message: params.onApprovalMessage }
+				: undefined,
+			onRejection: params.onRejectionMessage
+				? { chatId: params.chatId, message: params.onRejectionMessage }
 				: undefined,
 		};
 
@@ -423,10 +434,10 @@ class PubkyWriter {
 	/**
 	 * Handle rejection from admin.
 	 */
-	reject(
+	async reject(
 		writeId: string,
 		rejectedBy: string,
-	): { success: boolean; message: string } {
+	): Promise<{ success: boolean; message: string }> {
 		const pending = getPendingWrite(writeId);
 		if (!pending) {
 			return { success: false, message: "Write request not found" };
@@ -441,7 +452,19 @@ class PubkyWriter {
 			approvedAt: Date.now(),
 		});
 
-		// TODO: Support onRejectionMessage in pubkyWrite() if services want rejection callbacks
+		// Notify user if service requested it (via onRejectionMessage).
+		if (pending.onRejection && this.botApi) {
+			try {
+				await this.botApi.sendMessage(pending.onRejection.chatId, pending.onRejection.message, {
+					parse_mode: "Markdown",
+				});
+			} catch (notifyErr) {
+				log.warn("pubky.write.reject_notify_failed", {
+					id: writeId,
+					error: (notifyErr as Error).message,
+				});
+			}
+		}
 
 		return { success: true, message: "Rejected" };
 	}
@@ -485,7 +508,11 @@ class PubkyWriter {
 		userInfo?: { userName?: string; userDisplayName?: string },
 	): Promise<number | undefined> {
 		if (!this.config.adminGroup || !this.botApi) {
-			log.debug("pubky.write.no_admin_group", { id: pending.id });
+			log.warn("pubky.write.no_admin_group", {
+				id: pending.id,
+				hint:
+					"Set pubky.approval_group_chat_id in config.yaml — pending writes have nowhere to go for approval.",
+			});
 			return undefined;
 		}
 

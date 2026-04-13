@@ -280,6 +280,7 @@ async function handlePubkyWrite(
 			userId,
 			chatId,
 			onApprovalMessage: r.onApprovalMessage,
+			onRejectionMessage: r.onRejectionMessage,
 			userName: ctx.from?.username,
 			userDisplayName: ctx.from?.first_name
 				? `${ctx.from.first_name}${ctx.from.last_name ? " " + ctx.from.last_name : ""}`

@@ -125,6 +125,20 @@ export const migrations: Migration[] = [
 			);`);
 		},
 	},
+	{
+		id: 7,
+		name: "add_pending_writes_on_rejection",
+		up: (db: DB) => {
+			// Services can pass an onRejectionMessage with pubkyWrite() to get
+			// a courtesy "your submission was rejected" sent to the originating
+			// user when an admin rejects.
+			try {
+				db.execute(`ALTER TABLE pending_writes ADD COLUMN on_rejection TEXT;`);
+			} catch (_err) {
+				// Column might already exist
+			}
+		},
+	},
 ];
 
 export function runMigrations(db: DB): void {

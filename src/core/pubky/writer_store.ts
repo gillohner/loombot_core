@@ -20,6 +20,10 @@ export interface PendingWrite {
 		chatId: string;
 		message: string;
 	};
+	onRejection?: {
+		chatId: string;
+		message: string;
+	};
 	adminMessageId?: number;
 	approvedBy?: string;
 	approvedAt?: number;
@@ -65,14 +69,15 @@ export function savePendingWrite(write: PendingWrite): void {
 	database.query(
 		`INSERT INTO pending_writes (
 			id, path, data, preview, service_id, user_id, chat_id,
-			created_at, expires_at, status, on_approval, admin_message_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, expires_at, status, on_approval, on_rejection, admin_message_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			path=excluded.path,
 			data=excluded.data,
 			preview=excluded.preview,
 			status=excluded.status,
 			on_approval=excluded.on_approval,
+			on_rejection=excluded.on_rejection,
 			admin_message_id=excluded.admin_message_id`,
 		[
 			write.id,
@@ -86,45 +91,39 @@ export function savePendingWrite(write: PendingWrite): void {
 			write.expiresAt,
 			write.status,
 			write.onApproval ? JSON.stringify(write.onApproval) : null,
+			write.onRejection ? JSON.stringify(write.onRejection) : null,
 			write.adminMessageId ?? null,
 		],
 	);
 }
 
-export function getPendingWrite(id: string): PendingWrite | undefined {
-	const database = ensureDb();
-	const row = database
-		.query<
-			[
-				string,
-				string,
-				string,
-				string,
-				string,
-				string,
-				string,
-				number,
-				number,
-				string,
-				string | null,
-				number | null,
-				string | null,
-				number | null,
-				string | null,
-			]
-		>(
-			`SELECT id, path, data, preview, service_id, user_id, chat_id,
-				created_at, expires_at, status, on_approval, admin_message_id,
-				approved_by, approved_at, error
-			FROM pending_writes WHERE id = ?`,
-			[id],
-		)
-		.at(0);
+type PendingWriteRow = [
+	string, // id
+	string, // path
+	string, // data (json)
+	string, // preview
+	string, // service_id
+	string, // user_id
+	string, // chat_id
+	number, // created_at
+	number, // expires_at
+	string, // status
+	string | null, // on_approval (json)
+	string | null, // on_rejection (json)
+	number | null, // admin_message_id
+	string | null, // approved_by
+	number | null, // approved_at
+	string | null, // error
+];
 
-	if (!row) return undefined;
+const PENDING_SELECT = `SELECT id, path, data, preview, service_id, user_id, chat_id,
+	created_at, expires_at, status, on_approval, on_rejection, admin_message_id,
+	approved_by, approved_at, error
+FROM pending_writes`;
 
+function rowToPending(row: PendingWriteRow): PendingWrite {
 	const [
-		rid,
+		id,
 		path,
 		data,
 		preview,
@@ -135,14 +134,14 @@ export function getPendingWrite(id: string): PendingWrite | undefined {
 		expiresAt,
 		status,
 		onApproval,
+		onRejection,
 		adminMessageId,
 		approvedBy,
 		approvedAt,
 		error,
 	] = row;
-
 	return {
-		id: rid,
+		id,
 		path,
 		data: JSON.parse(data),
 		preview,
@@ -153,11 +152,21 @@ export function getPendingWrite(id: string): PendingWrite | undefined {
 		expiresAt,
 		status: status as PendingWrite["status"],
 		onApproval: onApproval ? JSON.parse(onApproval) : undefined,
+		onRejection: onRejection ? JSON.parse(onRejection) : undefined,
 		adminMessageId: adminMessageId ?? undefined,
 		approvedBy: approvedBy ?? undefined,
 		approvedAt: approvedAt ?? undefined,
 		error: error ?? undefined,
 	};
+}
+
+export function getPendingWrite(id: string): PendingWrite | undefined {
+	const database = ensureDb();
+	const row = database
+		.query<PendingWriteRow>(`${PENDING_SELECT} WHERE id = ?`, [id])
+		.at(0);
+	if (!row) return undefined;
+	return rowToPending(row);
 }
 
 export function updatePendingWriteStatus(
@@ -198,135 +207,20 @@ export function updatePendingWriteStatus(
 export function getExpiredPendingWrites(): PendingWrite[] {
 	const database = ensureDb();
 	const now = Date.now();
-	const rows = database.query<
-		[
-			string,
-			string,
-			string,
-			string,
-			string,
-			string,
-			string,
-			number,
-			number,
-			string,
-			string | null,
-			number | null,
-			string | null,
-			number | null,
-			string | null,
-		]
-	>(
-		`SELECT id, path, data, preview, service_id, user_id, chat_id,
-			created_at, expires_at, status, on_approval, admin_message_id,
-			approved_by, approved_at, error
-		FROM pending_writes
-		WHERE status = 'pending' AND expires_at < ?`,
+	const rows = database.query<PendingWriteRow>(
+		`${PENDING_SELECT} WHERE status = 'pending' AND expires_at < ?`,
 		[now],
 	);
-
-	return rows.map(
-		([
-			id,
-			path,
-			data,
-			preview,
-			serviceId,
-			userId,
-			chatId,
-			createdAt,
-			expiresAt,
-			status,
-			onApproval,
-			adminMessageId,
-			approvedBy,
-			approvedAt,
-			error,
-		]) => ({
-			id,
-			path,
-			data: JSON.parse(data),
-			preview,
-			serviceId,
-			userId,
-			chatId,
-			createdAt,
-			expiresAt,
-			status: status as PendingWrite["status"],
-			onApproval: onApproval ? JSON.parse(onApproval) : undefined,
-			adminMessageId: adminMessageId ?? undefined,
-			approvedBy: approvedBy ?? undefined,
-			approvedAt: approvedAt ?? undefined,
-			error: error ?? undefined,
-		}),
-	);
+	return rows.map(rowToPending);
 }
 
 export function getPendingWritesByStatus(status: PendingWrite["status"]): PendingWrite[] {
 	const database = ensureDb();
-	const rows = database.query<
-		[
-			string,
-			string,
-			string,
-			string,
-			string,
-			string,
-			string,
-			number,
-			number,
-			string,
-			string | null,
-			number | null,
-			string | null,
-			number | null,
-			string | null,
-		]
-	>(
-		`SELECT id, path, data, preview, service_id, user_id, chat_id,
-			created_at, expires_at, status, on_approval, admin_message_id,
-			approved_by, approved_at, error
-		FROM pending_writes
-		WHERE status = ?
-		ORDER BY created_at DESC`,
+	const rows = database.query<PendingWriteRow>(
+		`${PENDING_SELECT} WHERE status = ? ORDER BY created_at DESC`,
 		[status],
 	);
-
-	return rows.map(
-		([
-			id,
-			path,
-			data,
-			preview,
-			serviceId,
-			userId,
-			chatId,
-			createdAt,
-			expiresAt,
-			status,
-			onApproval,
-			adminMessageId,
-			approvedBy,
-			approvedAt,
-			error,
-		]) => ({
-			id,
-			path,
-			data: JSON.parse(data),
-			preview,
-			serviceId,
-			userId,
-			chatId,
-			createdAt,
-			expiresAt,
-			status: status as PendingWrite["status"],
-			onApproval: onApproval ? JSON.parse(onApproval) : undefined,
-			adminMessageId: adminMessageId ?? undefined,
-			approvedBy: approvedBy ?? undefined,
-			approvedAt: approvedAt ?? undefined,
-			error: error ?? undefined,
-		}),
-	);
+	return rows.map(rowToPending);
 }
 
 export function deletePendingWrite(id: string): void {

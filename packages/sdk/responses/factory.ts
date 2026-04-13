@@ -116,6 +116,7 @@ export const pubkyWrite = (
 	opts: BaseOpts & {
 		preview: string;
 		onApprovalMessage?: string;
+		onRejectionMessage?: string;
 	},
 ): PubkyWriteMessage =>
 	base(
@@ -125,6 +126,7 @@ export const pubkyWrite = (
 			data,
 			preview: opts.preview,
 			onApprovalMessage: opts.onApprovalMessage,
+			onRejectionMessage: opts.onRejectionMessage,
 		},
 		opts,
 	);

@@ -79,6 +79,7 @@ export interface PubkyWriteMessage extends BaseReply {
 	data: unknown; // JSON-serializable
 	preview: string; // Human-readable preview for admins
 	onApprovalMessage?: string; // Message to send user on approval
+	onRejectionMessage?: string; // Message to send user on rejection
 }
 
 export type ServiceResponse =
