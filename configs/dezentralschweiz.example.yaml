@@ -12,7 +12,7 @@
 
 bot:
   # REQUIRED: your Telegram user id so /config works in DMs + any group.
-  admin_ids: [784023144]
+  admin_ids: [784023144, 57066116, 979725167]
   lock_dm_config: false
 
 pubky:
