@@ -55,6 +55,23 @@ async function publishCommands(ctx: Context, chatId: string) {
 
 export const _testPublishCommands = publishCommands;
 
+/**
+ * Best-effort deletion of the user's triggering command message
+ * (e.g. `/start`, `/config`). Silently swallows permission errors so
+ * the bot still works in groups where it lacks Delete Messages rights.
+ */
+async function deleteTriggerSafe(ctx: Context): Promise<void> {
+	try {
+		const messageId = ctx.msg?.message_id;
+		const chatId = ctx.chat?.id;
+		if (messageId && chatId !== undefined) {
+			await ctx.api.deleteMessage(chatId, messageId);
+		}
+	} catch (err) {
+		log.debug("router.deleteTrigger.failed", { error: (err as Error).message });
+	}
+}
+
 export function buildMiddleware() {
 	const composer = new Composer<Context>();
 
@@ -87,16 +104,19 @@ export function buildMiddleware() {
 			if (command === "start") {
 				await publishCommands(ctx, chatId);
 				await ctx.reply("Hi! I'm configured per-chat. Admins can run /config to pick features.");
+				await deleteTriggerSafe(ctx);
 				return;
 			}
 
 			if (command === "config") {
 				if (!(await userIsAdmin(ctx))) {
 					await ctx.reply("Admin only.");
+					await deleteTriggerSafe(ctx);
 					return;
 				}
 				await publishCommands(ctx, chatId);
 				await sendMainMenu(ctx, chatId);
+				await deleteTriggerSafe(ctx);
 				return;
 			}
 

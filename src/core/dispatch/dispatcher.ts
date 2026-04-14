@@ -110,8 +110,21 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 			}
 		}
 		const response = res.value ?? { kind: "none" } as ServiceResponse;
-		if (response.kind !== "none" && route.deleteCommandMessage) {
-			response.deleteTrigger = true;
+		// Default: delete the user's command message after the bot responds.
+		// The adapter swallows permission errors silently (logged at debug),
+		// so this is a no-op if the bot can't delete. Services opt out by
+		// returning a response with `deleteTrigger: false` explicitly.
+		//
+		// Exceptions:
+		// - `none` responses: nothing to show, leave the user's command alone
+		// - `error` responses: keep the trigger visible so the user can see
+		//   what they typed and correct it
+		if (
+			response.kind !== "none" &&
+			response.kind !== "error" &&
+			(response as { deleteTrigger?: boolean }).deleteTrigger === undefined
+		) {
+			(response as { deleteTrigger?: boolean }).deleteTrigger = true;
 		}
 		// Apply per-service messageTtl from config (overrides global default, overridden by service code)
 		applyConfigTtl(response, route.config);
