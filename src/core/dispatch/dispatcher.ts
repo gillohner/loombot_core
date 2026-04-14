@@ -1,8 +1,6 @@
 // src/core/dispatch/dispatcher.ts
-// Moved from src/core/dispatcher.ts
 import { buildSnapshot } from "@core/snapshot/snapshot.ts";
 import { sandboxHost } from "@core/sandbox/host.ts";
-import { getServiceBundle } from "@core/config/store.ts";
 import { log } from "@core/util/logger.ts";
 import { pubkyWriter } from "@core/pubky/writer.ts";
 import {
@@ -66,20 +64,10 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 			},
 			manifest: { schemaVersion: 1 },
 		};
-		const bundle = getServiceBundle(route.bundleHash);
-		if (!bundle) {
-			log.error("dispatch.bundle.missing", { bundleHash: route.bundleHash });
-			return { response: { kind: "error", text: "bundle missing" } } as DispatcherResult;
-		}
-		// Pass the payload directly (matches sdk runtime expectation)
 		const res = await sandboxHost.run<ServiceResponse>(
-			bundle.data_url,
+			route.entry,
 			payload as unknown as ExecutePayload,
-			{
-				timeoutMs: route.net ? 10000 : 2000,
-				hasNpm: bundle.has_npm === 1,
-				net: route.net,
-			},
+			{ timeoutMs: route.net ? 10000 : 3000, net: route.net },
 		);
 		if (!res.ok) {
 			log.error("sandbox.command.error", {
@@ -149,12 +137,19 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 			log.debug("dispatch.callback.unparsed", { data: evt.data });
 			return { response: null };
 		}
-		// First try direct command lookup (most reliable - command is always stable)
+		// Three-step lookup because services can namespace callbacks by
+		// (a) command key, (b) feature id (route.serviceId), or
+		// (c) the hardcoded manifest id (e.g. "event_creator") when the
+		// service's SDK constant differs from the feature id in config.yaml.
 		let route = snapshot.commands[identifier];
-		// Fall back to searching by serviceId (for backward compatibility)
 		if (!route) {
 			route = Object.values(snapshot.commands).find(
 				(r) => r.serviceId === identifier,
+			) as typeof route;
+		}
+		if (!route) {
+			route = Object.values(snapshot.commands).find(
+				(r) => r.manifestServiceId === identifier,
 			) as typeof route;
 		}
 		if (!route) {
@@ -178,19 +173,10 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 			},
 			manifest: { schemaVersion: 1 },
 		};
-		const bundle = getServiceBundle(route.bundleHash);
-		if (!bundle) {
-			log.error("dispatch.bundle.missing", { bundleHash: route?.bundleHash });
-			return { response: { kind: "error", text: "bundle missing" } };
-		}
 		const res = await sandboxHost.run<ServiceResponse>(
-			bundle.data_url,
+			route.entry,
 			payload as unknown as ExecutePayload,
-			{
-				timeoutMs: route.net ? 10000 : 2000,
-				hasNpm: bundle.has_npm === 1,
-				net: route.net,
-			},
+			{ timeoutMs: route.net ? 10000 : 3000, net: route.net },
 		);
 		if (!res.ok) {
 			log.error("sandbox.callback.error", { error: res.error, serviceId: route.serviceId });
@@ -260,19 +246,10 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 					},
 					manifest: { schemaVersion: 1 },
 				};
-				const bundle = getServiceBundle(route.bundleHash);
-				if (!bundle) {
-					log.error("dispatch.bundle.missing", { bundleHash: route.bundleHash });
-					return { response: { kind: "error", text: "bundle missing" } };
-				}
 				const res = await sandboxHost.run<ServiceResponse>(
-					bundle.data_url,
+					route.entry,
 					payload as unknown as ExecutePayload,
-					{
-						timeoutMs: route.net ? 10000 : 2000,
-						hasNpm: bundle.has_npm === 1,
-						net: route.net,
-					},
+					{ timeoutMs: route.net ? 10000 : 3000, net: route.net },
 				);
 				if (!res.ok) {
 					log.error("sandbox.flow.message.error", {
@@ -333,19 +310,10 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 				},
 				manifest: { schemaVersion: 1 },
 			};
-			const bundle = getServiceBundle(listener.bundleHash);
-			if (!bundle) {
-				log.error("dispatch.listener.bundle.missing", { bundleHash: listener.bundleHash });
-				continue;
-			}
 			const res = await sandboxHost.run<ServiceResponse>(
-				bundle.data_url,
+				listener.entry,
 				payload as unknown as ExecutePayload,
-				{
-					timeoutMs: listener.net ? 10000 : bundle.has_npm === 1 ? 5000 : 2000,
-					hasNpm: bundle.has_npm === 1,
-					net: listener.net,
-				},
+				{ timeoutMs: listener.net ? 10000 : 3000, net: listener.net },
 			);
 			if (!res.ok) {
 				log.warn("sandbox.listener.error", {

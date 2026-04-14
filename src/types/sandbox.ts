@@ -1,11 +1,10 @@
 // src/types/sandbox.ts
 // Sandbox related shared types.
-// Capabilities requested for sandbox execution (currently mostly timeouts; net reserved)
+// Capabilities requested per-invocation. `net` lists domains the subprocess is
+// allowed to call; `timeoutMs` bounds the whole run.
 export interface SandboxCaps {
 	net?: string[];
 	timeoutMs?: number;
-	/** Whether the service uses npm packages (affects sandbox permissions) */
-	hasNpm?: boolean;
 }
 
 // The sandboxed service runtime (sdk/runtime.ts) expects a payload shape that matches

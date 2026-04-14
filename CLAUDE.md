@@ -37,7 +37,8 @@ Telegram → grammY Bot → Router Middleware → Dispatcher
 1. Telegram update arrives (polling or webhook)
 2. Router handles admin commands (`/start`, `/config`) or dispatches to services
 3. Dispatcher loads routing snapshot for the chat, finds matching service route
-4. Service bundle (pre-bundled SDK + service code) runs in isolated Deno subprocess
+4. Sandbox host spawns a Deno subprocess pointed at the service source file; the subprocess resolves
+   `@sdk/` / `@eventky/` / `npm:` imports via the project's `deno.json` import map
 5. Service returns `ServiceResponse` via stdout JSON
 6. Response adapter converts to Telegram API calls
 
@@ -57,7 +58,7 @@ src/
 │   ├── config/schema.ts           # Zod schema for config.yaml
 │   ├── config/runtime.ts          # Loaded operator-config singleton + hash
 │   ├── config/merge.ts            # Resolve per-chat effective feature list (operator + overrides)
-│   ├── config/store.ts            # SQLite persistence (overrides, snapshots, bundles, writes, pins)
+│   ├── config/store.ts            # SQLite persistence (overrides, snapshots, writes, pins)
 │   ├── config/migrations.ts       # DB schema migrations
 │   ├── dispatch/dispatcher.ts     # Event routing → sandbox execution → state mgmt
 │   ├── sandbox/host.ts            # Deno subprocess with zero permissions
@@ -71,9 +72,8 @@ src/
 │   ├── pubky/writer_store.ts      # Writer SQLite persistence
 │   ├── ttl/store.ts               # Message auto-deletion scheduling
 │   └── util/
-│       ├── bundle.ts              # Inline SDK + service into a single file
 │       ├── logger.ts              # Structured JSON logging
-│       └── npm_allowlist.ts       # Allowed npm packages for services
+│       └── utils.ts               # Misc helpers (command normalization, callback data parsing)
 ├── middleware/
 │   ├── router.ts                  # Command routing, admin commands
 │   ├── response.ts                # ServiceResponse → Telegram API
@@ -91,7 +91,7 @@ src/
     └── services.ts                # Service protocol types
 
 packages/
-├── sdk/                       # Service SDK (bundled into every service)
+├── sdk/                       # Service SDK (imported by every service via the @sdk/ import map)
 │   ├── mod.ts                 # Public API surface
 │   ├── service.ts             # defineService() + ServiceDefinition
 │   ├── events.ts              # CommandEvent, CallbackEvent, MessageEvent
@@ -152,28 +152,40 @@ the subprocess.
 
 ### Sandbox Security Model
 
-Services run in Deno subprocesses with **zero permissions by default**:
+Services run in `deno run` subprocesses with a narrow permission set:
 
-- `--allow-read=/tmp` always granted (bundles stored as temp files)
-- `--allow-read=$DENO_CACHE,/tmp` for npm services (need cached modules)
-- `--allow-net=domain1,domain2` only if service declares `net: ["domain"]` in spec
-- No env vars — subprocess gets minimal env: `HOME`, `PATH`, `DENO_DIR`, `XDG_CACHE_HOME`
-- Communication via stdin (JSON payload) → stdout (JSON response)
-- Timeout enforcement (max 20s; default 2s for commands, 10s if net-enabled)
-- Console output redirected to stderr in runner to avoid polluting JSON
+- `--allow-read=<projectRoot>,$DENO_CACHE,/tmp` — source files + the Deno cache (for `npm:` modules
+  that the parent process already fetched) + tmp
+- `--allow-net=domain1,domain2` only if the service's operator config declares `net: ["domain"]` (or
+  the service registry carries a default net list)
+- `--no-remote` blocks fetching of arbitrary remote modules at runtime (import map and local files
+  only)
+- `--no-lock` skips lockfile validation — the subprocess shares the parent's Deno cache, so
+  dependency integrity is governed by the parent's `deno.lock`
+- Minimal env: `HOME`, `PATH`, `DENO_DIR`, `XDG_CACHE_HOME` only — no secrets leak
+- Communication: JSON payload on stdin, JSON `ServiceResponse` on stdout
+- Timeout 100ms–20s per call (default 3s; 10s for services with `net` declared)
+- Console output redirected to stderr inside `runner.ts` to avoid polluting the stdout JSON
+
+The old runtime service bundler (regex-inlining all imports into a single temp file +
+content-addressed SHA-256 cache) is gone — subprocesses resolve imports directly via the project's
+`deno.json` import map. The parent process's Deno cache is shared with the subprocess, so any `npm:`
+module imported at least once by the parent (typically via `loadMeta()` in the snapshot builder) is
+available to the subprocess without needing network access.
 
 ### Snapshot System
 
-Routing snapshots map commands → service bundles. Three-layer cache:
+Routing snapshots map commands → service routes. Two-layer cache:
 
 1. In-memory (10s TTL per chatId)
-2. SQLite (keyed by config hash) — **cleared on every process startup** (`clearAllSnapshots()` in
-   `bot.ts`)
-3. Content-addressed bundles (SHA-256 deduplication)
+2. SQLite (`snapshots_by_config`, keyed by config hash) — **cleared on every process startup**
+   (`clearAllSnapshots()` in `bot.ts`) so the first request always rebuilds from scratch
 
-On startup, all persisted snapshots are wiped so the first request triggers a fresh build. This
-means code changes (via `--watch`) and edits to `config.yaml` are always picked up without needing
-to delete `bot.sqlite`. To pick up `config.yaml` changes, restart the bot.
+A route carries the service's source file path (`entry`) directly, plus its merged config blob,
+datasets, and `net` list. No bundle hashes, no content-addressed dedup.
+
+Code changes under `--watch` and edits to `config.yaml` are always picked up on the next request
+without any manual intervention. To pick up `config.yaml` changes, restart the bot.
 
 ### State Management
 
@@ -232,7 +244,6 @@ Copy one to `config.yaml` and edit it. Run `deno task config:check` to validate.
 - `chat_feature_overrides` — per-chat feature toggles and config-blob overrides (source of truth for
   "known chats" — the scheduler enumerates chats via DISTINCT chat_id here)
 - `snapshots_by_config` — cached routing snapshots keyed by config hash
-- `service_bundles` — content-addressed bundled service code
 - `ttl_messages` — scheduled message auto-deletion
 - `pending_writes` — Pubky write admin-approval queue (plus `on_approval` / `on_rejection` hooks)
 - `periodic_pin_state` — scheduler's per-chat last-pinned message id + last-fired slot
@@ -266,23 +277,6 @@ PUBKY_RECOVERY_FILE             # Path to .pkarr recovery file → pubky.recover
 PUBKY_APPROVAL_GROUP_CHAT_ID    # Telegram group id → pubky.approval_group_chat_id
 PUBKY_APPROVAL_TIMEOUT_HOURS    # Integer hours → pubky.approval_timeout_hours
 ```
-
-## Bundler System (`src/core/util/bundle.ts`)
-
-The bundler inlines all imports (SDK, eventky-specs, relative paths) into a single file for sandbox:
-
-- **Import resolution:** Handles `@sdk/`, `@eventky/`, `./`, `../` imports recursively via regex on
-  static `import`/`export` statements
-- **Dynamic `import()` NOT supported:** The bundler only processes static imports. Dynamic
-  `await import("../path")` is left untouched in the bundle — at runtime it resolves relative to
-  `/tmp` and fails with `Module not found`. **Always use static imports in services.**
-- **Relative path resolution:** `resolveRelativePath()` handles `../` by walking the path segments;
-  preserves leading `/` for absolute paths
-- **Output:** All services (npm and non-npm) written to temp files in `/tmp` (not data URLs — OS
-  ARG_MAX limit)
-- **npm handling:** Uses `deno cache` to pre-fetch allowed npm modules; subprocess gets minimal env
-  to avoid ARG_MAX
-- **Content addressing:** SHA-256 hash of final code → `service_bundles` table for deduplication
 
 ## SDK Patterns for Services (`packages/sdk/`)
 
@@ -348,15 +342,17 @@ The public key is a 52-character z-base-32 string (NO "pubky" prefix).
 - Always use `deno fmt` before committing (tabs, 100 char lines)
 - Snapshots auto-clear on process startup — code and config changes are picked up on restart without
   manual intervention
-- The SDK is fully inlined into service bundles — changes to `packages/sdk/` affect all services
-- npm packages in services must be on the allowlist (`src/core/util/npm_allowlist.ts`)
+- The SDK is imported by each service via the `@sdk/` import map — edits to `packages/sdk/` affect
+  every service on the next subprocess spawn
+- npm packages in services must be declared in the top-level `deno.json` imports map; the parent
+  process pre-warms the shared Deno cache for them via the snapshot builder's `loadMeta`
 - Tests: `deno task test` — uses Deno's built-in test runner
 - Config validation: `deno task config:check <path>` — parses a YAML profile through the loader
   without booting the bot
 - `dispatch.miss` logs at debug level (hidden at default info level) — set `LOG_MIN_LEVEL=debug` to
   see routing misses
-- **Never use dynamic `import()` in services** — the bundler only handles static imports. Dynamic
-  imports resolve to `/tmp/...` at runtime and fail.
+- Dynamic `import()` in services is fine — subprocesses have read access to the project root and the
+  Deno cache, so any relative or `@sdk/`/`@eventky/`/`npm:` import resolves normally.
 - **JSON config mutations are not a concern** — services are not deployed yet, so breaking changes
   to config schemas, service definitions, or data formats can be made freely without migration
   worries

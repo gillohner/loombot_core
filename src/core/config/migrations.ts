@@ -18,20 +18,15 @@ export const migrations: Migration[] = [
 		name: "baseline_schema",
 		up: (db: DB) => {
 			// Historical note: this migration used to also create `chat_configs`
-			// (dropped in migration 8) and `snapshots` (dropped in migration 2).
-			// Both are intentionally gone. New installs go straight to the
-			// current schema; existing installs hit the later drop migrations.
+			// (dropped in migration 8), `snapshots` (dropped in migration 2), and
+			// `service_bundles` (dropped in migration 9). Those are gone — new
+			// installs go straight to the current schema via later migrations;
+			// existing installs hit the drop migrations in sequence.
 			db.execute(`CREATE TABLE IF NOT EXISTS snapshots_by_config (
             config_hash TEXT PRIMARY KEY,
             snapshot_json TEXT NOT NULL,
             built_at INTEGER NOT NULL,
             integrity_hash TEXT NOT NULL
-        );`);
-			db.execute(`CREATE TABLE IF NOT EXISTS service_bundles (
-            bundle_hash TEXT PRIMARY KEY,
-            data_url TEXT NOT NULL,
-            code TEXT NOT NULL,
-            created_at INTEGER NOT NULL
         );`);
 		},
 	},
@@ -77,14 +72,10 @@ export const migrations: Migration[] = [
 	{
 		id: 4,
 		name: "add_service_bundles_has_npm",
-		up: (db: DB) => {
-			// Add has_npm column to service_bundles table
-			// Default 0 for existing bundles (they were created before npm support)
-			try {
-				db.execute(`ALTER TABLE service_bundles ADD COLUMN has_npm INTEGER NOT NULL DEFAULT 0;`);
-			} catch (_err) {
-				// Column might already exist
-			}
+		up: (_db: DB) => {
+			// No-op now: the `service_bundles` table is dropped entirely in
+			// migration 9. Kept as a numbered slot so existing installs still
+			// advance through the migration sequence monotonically.
 		},
 	},
 	{
@@ -141,6 +132,28 @@ export const migrations: Migration[] = [
 			// and keeping it around was fooling the scheduler's chat enumeration.
 			try {
 				db.execute(`DROP TABLE IF EXISTS chat_configs;`);
+			} catch (_err) {
+				// ignore
+			}
+		},
+	},
+	{
+		id: 9,
+		name: "drop_service_bundles_table",
+		up: (db: DB) => {
+			// Services now run from their source path directly — the sandbox
+			// subprocess resolves @sdk/ / @eventky/ / npm: imports via the
+			// project's deno.json import map. No bundler, no content-addressed
+			// blob cache, no service_bundles row per snapshot. Also clear any
+			// persisted snapshots so stale routes (pointing at dead bundle
+			// hashes) don't survive the upgrade.
+			try {
+				db.execute(`DROP TABLE IF EXISTS service_bundles;`);
+			} catch (_err) {
+				// ignore
+			}
+			try {
+				db.execute(`DELETE FROM snapshots_by_config;`);
 			} catch (_err) {
 				// ignore
 			}

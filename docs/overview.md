@@ -147,10 +147,10 @@ Routes incoming Telegram updates to the appropriate handlers:
 The dispatcher is the heart of the system. It:
 
 1. Receives events (commands, callbacks, messages)
-2. Looks up the appropriate service from the routing snapshot
-3. Loads the service bundle
-4. Executes the service in a sandboxed environment
-5. Processes the response and manages state
+2. Looks up the appropriate service route from the routing snapshot
+3. Spawns the sandbox subprocess pointed at the service's source file
+4. Collects the `ServiceResponse` from the subprocess's stdout
+5. Applies any state directive and returns the response to the router
 
 ```mermaid
 sequenceDiagram
@@ -165,9 +165,8 @@ sequenceDiagram
     Router->>Dispatcher: dispatch(command)
     Dispatcher->>Snapshot: buildSnapshot(chatId)
     Snapshot-->>Dispatcher: RoutingSnapshot
-    Dispatcher->>Dispatcher: Load service bundle
-    Dispatcher->>Sandbox: run(bundle, payload)
-    Sandbox->>Service: Execute with payload
+    Dispatcher->>Sandbox: run(route.entry, payload)
+    Sandbox->>Service: Execute with payload (subprocess)
     Service-->>Sandbox: ServiceResponse
     Sandbox-->>Dispatcher: SandboxResult
     Dispatcher->>Dispatcher: Apply state directive
@@ -177,14 +176,17 @@ sequenceDiagram
 
 ### 4. Sandbox Host (`src/core/sandbox/host.ts`)
 
-Services run in isolated Deno subprocesses with no permissions by default:
+Services run in narrow `deno run` subprocesses:
 
-- No network access
-- No file system access
-- No remote module imports
-- Timeout protection (max 20 seconds)
+- `--allow-read=<projectRoot>,$DENO_CACHE,/tmp` — source + shared Deno cache only
+- `--allow-net` gated per-service via the `net` list in the service registry
+- `--no-remote` blocks arbitrary remote module fetching at runtime
+- Minimal env: `HOME`, `PATH`, `DENO_DIR`, `XDG_CACHE_HOME` — no secrets leak
+- Timeout protection (3s default, 10s for net-enabled services, 20s ceiling)
 
-This ensures services cannot access sensitive data or cause harm.
+The subprocess runs the service's **source file directly** — there is no pre-bundling. Imports
+(`@sdk/`, `@eventky/`, relative, `npm:`) are resolved by Deno via the project's `deno.json` import
+map and the shared Deno cache.
 
 ### 5. PubkyWriter (`src/core/pubky/writer.ts`)
 
@@ -253,12 +255,13 @@ sequenceDiagram
 
 ### 6. Snapshot System (`src/core/snapshot/snapshot.ts`)
 
-Snapshots are cached routing tables that map commands to service bundles:
+Snapshots are cached routing tables that map commands and listeners to service routes:
 
-- Built from configuration templates
-- Cached in-memory with TTL
-- Persisted to SQLite by config hash
-- Includes integrity verification
+- Built from the merged operator config + per-chat overrides (via `resolveChatConfig()`)
+- Cached in-memory (10s TTL) and in SQLite (`snapshots_by_config`, keyed by config hash)
+- Persisted snapshots are cleared on every process start so code/config changes always land on the
+  next request
+- Each route carries the service's source file path directly — no bundle hashes
 
 ## Service Types
 
@@ -596,7 +599,7 @@ loombot/
 │   └── adapters/
 │       └── telegram/       # Telegram-specific adapters
 ├── packages/
-│   ├── sdk/                # Service SDK (inlined into every service bundle)
+│   ├── sdk/                # Service SDK (imported by every service via @sdk/)
 │   ├── core_services/      # Operator-shipped services
 │   └── eventky-specs/      # Local eventky data utilities
 └── docs/

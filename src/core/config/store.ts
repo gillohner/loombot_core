@@ -1,16 +1,17 @@
 // src/core/config/store.ts
-// SQLite-backed storage for routing snapshots, service bundles, per-chat
-// feature overrides, pending Pubky writes, and the periodic pin state.
-// Flow/session state intentionally remains purely in-memory.
+// SQLite-backed storage for routing snapshots, per-chat feature overrides,
+// pending Pubky writes, and the periodic pin state. Flow/session state stays
+// in memory.
 //
 // Schema (managed via migrations):
 // chat_feature_overrides(chat_id, feature_id PK, enabled, data, updated_at)
 // snapshots_by_config(config_hash TEXT PK, snapshot_json, built_at, integrity_hash)
-// service_bundles(bundle_hash TEXT PK, data_url, code, created_at, has_npm)
 // pending_writes(id TEXT PK, ..., on_approval, on_rejection)
 // periodic_pin_state(chat_id TEXT PK, pinned_message_id, last_fired_slot, updated_at)
-// NOTE: The legacy `chat_configs` and `snapshots` tables from the pre-YAML
-// architecture are dropped in migrations 2 and 8.
+//
+// NOTE: Historical tables dropped by migrations: `snapshots` (2), `chat_configs`
+// (8), `service_bundles` (9) — services now execute from source paths directly
+// instead of pre-bundled content-addressed blobs.
 
 import { DB } from "sqlite";
 import { runMigrations } from "@core/config/migrations.ts";
@@ -23,14 +24,6 @@ export interface SnapshotRecord {
 	snapshot_json: string;
 	built_at: number;
 	integrity_hash: string;
-}
-
-export interface ServiceBundleRecord {
-	bundle_hash: string;
-	data_url: string;
-	code: string;
-	created_at: number;
-	has_npm?: number; // 0 or 1, indicates if bundle uses npm packages
 }
 
 // ---------------------------------------------------------------------------
@@ -216,72 +209,6 @@ export function deleteSnapshotByConfigHash(configHash: string): void {
 export function clearAllSnapshots(): void {
 	const database = ensureDb();
 	database.query(`DELETE FROM snapshots_by_config`);
-}
-
-// ---------------------------------------------------------------------------
-// Service Bundles (content-addressed)
-// ---------------------------------------------------------------------------
-export function saveServiceBundle(rec: ServiceBundleRecord): void {
-	const database = ensureDb();
-	database.query(
-		`INSERT INTO service_bundles (bundle_hash, data_url, code, created_at, has_npm)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(bundle_hash) DO UPDATE SET data_url = excluded.data_url`,
-		[rec.bundle_hash, rec.data_url, rec.code, rec.created_at, rec.has_npm ?? 0],
-	);
-}
-
-export function getServiceBundle(bundleHash: string): ServiceBundleRecord | undefined {
-	const database = ensureDb();
-	const row = database
-		.query<[string, string, string, number, number]>(
-			`SELECT bundle_hash, data_url, code, created_at, has_npm
-             FROM service_bundles WHERE bundle_hash = ?`,
-			[bundleHash],
-		)
-		.at(0);
-	if (!row) return undefined;
-	const [hash, dataUrl, code, createdAt, hasNpm] = row;
-	return { bundle_hash: hash, data_url: dataUrl, code, created_at: createdAt, has_npm: hasNpm };
-}
-
-export function listAllBundleHashes(): string[] {
-	const database = ensureDb();
-	const rows = database.query<[string]>(
-		`SELECT bundle_hash FROM service_bundles`,
-	);
-	return rows.map((r) => r[0]);
-}
-
-// Bundles referenced by ANY snapshot (config-hash snapshots considered authoritative)
-export function listReferencedBundleHashes(): Set<string> {
-	const database = ensureDb();
-	const hashes = new Set<string>();
-	const rows = database.query<[string]>(
-		`SELECT snapshot_json FROM snapshots_by_config`,
-	);
-	for (const [json] of rows) {
-		try {
-			const snap = JSON.parse(json) as RoutingSnapshot;
-			for (const c of Object.values(snap.commands)) {
-				// Use unknown then narrow to string for bundleHash
-				const bundleHash = (c as unknown as { bundleHash?: string }).bundleHash;
-				if (typeof bundleHash === "string" && bundleHash) hashes.add(bundleHash);
-			}
-			for (const l of snap.listeners) {
-				const bundleHash = (l as unknown as { bundleHash?: string }).bundleHash;
-				if (typeof bundleHash === "string" && bundleHash) hashes.add(bundleHash);
-			}
-		} catch {
-			// Ignore malformed snapshot row
-		}
-	}
-	return hashes;
-}
-
-export function deleteBundle(bundleHash: string): void {
-	const database = ensureDb();
-	database.query(`DELETE FROM service_bundles WHERE bundle_hash = ?`, [bundleHash]);
 }
 
 // ---------------------------------------------------------------------------

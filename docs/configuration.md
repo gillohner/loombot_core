@@ -173,7 +173,6 @@ changes and the next request rebuilds from scratch.
 | ------------------------ | ------------------------------------------------------------------- |
 | `chat_feature_overrides` | Per-chat feature toggles and override data (calendars, periodic, …) |
 | `snapshots_by_config`    | Cached routing snapshots keyed by config hash                       |
-| `service_bundles`        | Content-addressed bundled service code                              |
 | `ttl_messages`           | Scheduled message auto-deletions                                    |
 | `pending_writes`         | Pubky write admin-approval queue                                    |
 | `periodic_pin_state`     | Scheduler per-chat last-pinned message id + last-fired slot         |

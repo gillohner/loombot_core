@@ -6,13 +6,22 @@ export interface RouteMeta {
 	description?: string;
 }
 export interface BaseRoute {
-	serviceId: string; // matches service manifest id
-	bundleHash: string;
+	serviceId: string; // feature id — what the dispatcher routes by
+	/** Source file path (relative to project root) executed by the sandbox. */
+	entry: string;
 	config?: Record<string, unknown>;
 	meta: RouteMeta;
-	datasets?: Record<string, unknown>; // placeholder for resolved dataset blobs (json / future binary refs)
+	datasets?: Record<string, unknown>; // resolved dataset blobs (json / future binary refs)
 	net?: string[]; // allowed network domains for sandbox
 	deleteCommandMessage?: boolean; // delete user's command message after bot responds
+	/**
+	 * The hardcoded service id from the service module's manifest (e.g.
+	 * "event_creator", "meetups"). Services use this to namespace inline-
+	 * keyboard callback data, so the dispatcher needs it as a fallback
+	 * lookup key when the feature id in config.yaml differs from the
+	 * underlying service's manifest id.
+	 */
+	manifestServiceId?: string;
 }
 export interface CommandRoute extends BaseRoute {
 	kind: "single_command" | "command_flow";
@@ -26,8 +35,5 @@ export interface RoutingSnapshot {
 	listeners: Readonly<ListenerRoute[]>;
 	builtAt: number;
 	version: number;
-	sdkSchemaVersion?: number;
-	sourceSig?: string;
 	configHash?: string;
-	integrity?: string;
 }
