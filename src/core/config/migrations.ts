@@ -22,11 +22,16 @@ export const migrations: Migration[] = [
 			// `service_bundles` (dropped in migration 9). Those are gone — new
 			// installs go straight to the current schema via later migrations;
 			// existing installs hit the drop migrations in sequence.
+			//
+			// The `integrity_hash` column is created here (as NOT NULL) for
+			// backwards compatibility with existing installs; migration 10 makes
+			// it optional on fresh installs via the DROP COLUMN path. Either way
+			// the column is never read anymore.
 			db.execute(`CREATE TABLE IF NOT EXISTS snapshots_by_config (
             config_hash TEXT PRIMARY KEY,
             snapshot_json TEXT NOT NULL,
             built_at INTEGER NOT NULL,
-            integrity_hash TEXT NOT NULL
+            integrity_hash TEXT NOT NULL DEFAULT ''
         );`);
 		},
 	},
@@ -156,6 +161,34 @@ export const migrations: Migration[] = [
 				db.execute(`DELETE FROM snapshots_by_config;`);
 			} catch (_err) {
 				// ignore
+			}
+		},
+	},
+	{
+		id: 10,
+		name: "drop_snapshots_integrity_hash",
+		up: (db: DB) => {
+			// `integrity_hash` was written on every snapshot save but never
+			// read — it was part of an old integrity check that got removed.
+			// Drop the column via table-rebuild (SQLite ALTER TABLE DROP COLUMN
+			// requires 3.35+, which the deno.land/x/sqlite bundle may not have).
+			try {
+				db.execute(
+					`CREATE TABLE snapshots_by_config_new (
+					config_hash TEXT PRIMARY KEY,
+					snapshot_json TEXT NOT NULL,
+					built_at INTEGER NOT NULL
+				);`,
+				);
+				db.execute(
+					`INSERT INTO snapshots_by_config_new (config_hash, snapshot_json, built_at)
+					 SELECT config_hash, snapshot_json, built_at FROM snapshots_by_config;`,
+				);
+				db.execute(`DROP TABLE snapshots_by_config;`);
+				db.execute(`ALTER TABLE snapshots_by_config_new RENAME TO snapshots_by_config;`);
+			} catch (_err) {
+				// ignore — either the rebuild already happened or the table is
+				// in an unexpected state; either way the column is never read.
 			}
 		},
 	},

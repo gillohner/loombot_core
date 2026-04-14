@@ -5,13 +5,15 @@
 //
 // Schema (managed via migrations):
 // chat_feature_overrides(chat_id, feature_id PK, enabled, data, updated_at)
-// snapshots_by_config(config_hash TEXT PK, snapshot_json, built_at, integrity_hash)
+// snapshots_by_config(config_hash TEXT PK, snapshot_json, built_at)
 // pending_writes(id TEXT PK, ..., on_approval, on_rejection)
 // periodic_pin_state(chat_id TEXT PK, pinned_message_id, last_fired_slot, updated_at)
 //
 // NOTE: Historical tables dropped by migrations: `snapshots` (2), `chat_configs`
 // (8), `service_bundles` (9) — services now execute from source paths directly
-// instead of pre-bundled content-addressed blobs.
+// instead of pre-bundled content-addressed blobs. Migration 10 drops the
+// `integrity_hash` column from `snapshots_by_config` (it was never actually
+// validated anywhere).
 
 import { DB } from "sqlite";
 import { runMigrations } from "@core/config/migrations.ts";
@@ -23,7 +25,6 @@ export interface SnapshotRecord {
 	config_hash: string;
 	snapshot_json: string;
 	built_at: number;
-	integrity_hash: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,34 +186,31 @@ function parseJsonSafe(s: string): Record<string, unknown> {
 export function saveSnapshotByConfigHash(configHash: string, snapshot: RoutingSnapshot): void {
 	const database = ensureDb();
 	const json = JSON.stringify(snapshot);
-	const integrity = sha256HexSync(json); // synchronous helper
 	database.query(
-		`INSERT INTO snapshots_by_config (config_hash, snapshot_json, built_at, integrity_hash)
-         VALUES (?, ?, ?, ?)
+		`INSERT INTO snapshots_by_config (config_hash, snapshot_json, built_at)
+         VALUES (?, ?, ?)
          ON CONFLICT(config_hash) DO UPDATE SET
            snapshot_json=excluded.snapshot_json,
-           built_at=excluded.built_at,
-           integrity_hash=excluded.integrity_hash`,
-		[configHash, json, snapshot.builtAt ?? Date.now(), integrity],
+           built_at=excluded.built_at`,
+		[configHash, json, snapshot.builtAt ?? Date.now()],
 	);
 }
 
 export function loadSnapshotByConfigHash(configHash: string): SnapshotRecord | undefined {
 	const database = ensureDb();
 	const row = database
-		.query<[string, string, number, string]>(
-			`SELECT config_hash, snapshot_json, built_at, integrity_hash
+		.query<[string, string, number]>(
+			`SELECT config_hash, snapshot_json, built_at
              FROM snapshots_by_config WHERE config_hash = ?`,
 			[configHash],
 		)
 		.at(0);
 	if (!row) return undefined;
-	const [chash, json, builtAt, integrity] = row;
+	const [chash, json, builtAt] = row;
 	return {
 		config_hash: chash,
 		snapshot_json: json,
 		built_at: builtAt,
-		integrity_hash: integrity,
 	};
 }
 
@@ -300,20 +298,10 @@ export function setPeriodicLastFired(chatId: string, slot: string): void {
 // Hash utilities
 // ---------------------------------------------------------------------------
 export async function sha256Hex(input: string | Uint8Array): Promise<string> {
-	const data = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input); // Ensure it's backed by ArrayBuffer, not SharedArrayBuffer
+	// TextEncoder output is backed by a plain ArrayBuffer (not SharedArrayBuffer),
+	// so it can be fed directly to subtle.digest.
+	const data = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
 	const digest = await crypto.subtle.digest("SHA-256", data);
 	const bytes = new Uint8Array(digest);
 	return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Synchronous helper for integrity hashing (uses crypto.getRandomValues fallback if subtle unavailable).
-function sha256HexSync(input: string): string {
-	// For test/runtime convenience we compute a fast fallback hash (FNV-1a) then re-hash via async
-	// caller when cryptographic strength is actually required. Here it's only for change detection.
-	let h = 0x811c9dc5;
-	for (let i = 0; i < input.length; i++) {
-		h ^= input.charCodeAt(i);
-		h = Math.imul(h, 0x01000193);
-	}
-	return (h >>> 0).toString(16).padStart(8, "0");
 }
