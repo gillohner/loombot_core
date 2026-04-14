@@ -8,6 +8,7 @@ import { convertCard, convertCarousel, convertKeyboard, convertMenu } from "./ui
 import { CONFIG } from "@core/config.ts";
 import { trackMessage } from "@core/ttl/store.ts";
 import { pubkyWriter } from "@core/pubky/writer.ts";
+import { t } from "@core/i18n/mod.ts";
 
 // Narrow helper type for edit options compatibility
 type BasicMessageOptions = Record<string, unknown> | undefined;
@@ -168,7 +169,7 @@ async function handlePhoto(ctx: Context, r: Extract<ServiceResponse, { kind: "ph
 		return msg.message_id;
 	} catch (err) {
 		log.error("photo.send.failed", { error: err });
-		await ctx.reply(r.caption ?? "(photo failed)");
+		await ctx.reply(r.caption ?? t("adapter.photo_failed"));
 	}
 }
 
@@ -195,7 +196,7 @@ async function handleAudio(ctx: Context, r: Extract<ServiceResponse, { kind: "au
 		return msg.message_id;
 	} catch (err) {
 		log.error("audio.send.failed", { error: err });
-		await ctx.reply("(audio failed)");
+		await ctx.reply(t("adapter.audio_failed"));
 	}
 }
 
@@ -209,7 +210,7 @@ async function handleVideo(ctx: Context, r: Extract<ServiceResponse, { kind: "vi
 		return msg.message_id;
 	} catch (err) {
 		log.error("video.send.failed", { error: err });
-		await ctx.reply("(video failed)");
+		await ctx.reply(t("adapter.video_failed"));
 	}
 }
 
@@ -219,7 +220,7 @@ async function handleDocument(ctx: Context, r: Extract<ServiceResponse, { kind: 
 		return msg.message_id;
 	} catch (err) {
 		log.error("document.send.failed", { error: err });
-		await ctx.reply("(document failed)");
+		await ctx.reply(t("adapter.document_failed"));
 	}
 }
 
@@ -239,7 +240,7 @@ async function handleLocation(ctx: Context, r: Extract<ServiceResponse, { kind: 
 		}
 	} catch (err) {
 		log.error("location.send.failed", { error: err });
-		await ctx.reply(`📍 Location: ${r.latitude}, ${r.longitude}`);
+		await ctx.reply(t("adapter.location_fallback", { lat: r.latitude, lon: r.longitude }));
 	}
 }
 
@@ -251,7 +252,12 @@ async function handleContact(ctx: Context, r: Extract<ServiceResponse, { kind: "
 		return msg.message_id;
 	} catch (err) {
 		log.error("contact.send.failed", { error: err });
-		await ctx.reply(`👤 Contact: ${r.firstName} ${r.lastName || ""} - ${r.phoneNumber}`);
+		await ctx.reply(
+			t("adapter.contact_fallback", {
+				name: `${r.firstName} ${r.lastName || ""}`.trim(),
+				phone: r.phoneNumber,
+			}),
+		);
 	}
 }
 
@@ -261,7 +267,7 @@ async function handlePubkyWrite(
 ): Promise<void> {
 	// Queue the write request with PubkyWriter
 	if (!pubkyWriter.isReady()) {
-		await ctx.reply("⚠️ Pubky publishing is not configured for this bot.");
+		await ctx.reply(t("adapter.pubky_not_configured"));
 		return;
 	}
 
@@ -287,12 +293,10 @@ async function handlePubkyWrite(
 				: undefined,
 		});
 
-		await ctx.reply(
-			"📝 Your submission has been sent for review. You'll be notified once approved.",
-		);
+		await ctx.reply(t("adapter.pubky_queued"));
 	} catch (err) {
 		log.error("pubky.write.queue.failed", { error: (err as Error).message });
-		await ctx.reply("⚠️ Failed to submit. Please try again later.");
+		await ctx.reply(t("adapter.pubky_queue_failed"));
 	}
 }
 
@@ -303,7 +307,7 @@ async function handleUI(ctx: Context, r: Extract<ServiceResponse, { kind: "ui" }
 		switch (r.uiType) {
 			case "keyboard":
 				result = {
-					text: r.text || "Choose an option:",
+					text: r.text || t("adapter.ui_choose_option"),
 					reply_markup: convertKeyboard(r.ui as import("@sdk/mod.ts").UIKeyboard),
 				};
 				break;

@@ -180,6 +180,19 @@ const de = {
 			},
 		},
 	},
+	adapter: {
+		photo_failed: "(Foto fehlgeschlagen)",
+		audio_failed: "(Audio fehlgeschlagen)",
+		video_failed: "(Video fehlgeschlagen)",
+		document_failed: "(Dokument fehlgeschlagen)",
+		location_fallback: "📍 Standort: {{lat}}, {{lon}}",
+		contact_fallback: "👤 Kontakt: {{name}} – {{phone}}",
+		pubky_not_configured: "⚠️ Pubky-Veröffentlichung ist für diesen Bot nicht konfiguriert.",
+		pubky_queued:
+			"📝 Deine Einreichung wurde zur Überprüfung eingereicht. Du wirst benachrichtigt, sobald sie genehmigt ist.",
+		pubky_queue_failed: "⚠️ Einreichung fehlgeschlagen. Bitte später erneut versuchen.",
+		ui_choose_option: "Wähle eine Option:",
+	},
 	pubky: {
 		button_approve: "✅ Genehmigen",
 		button_reject: "❌ Ablehnen",

@@ -66,7 +66,9 @@ features:
     lock: false
     allow_external_calendars: true
     config:
-      title: "Upcoming Events"
+      # Omit `title` to let the bot's `bot.language` pick the localized default
+      # ("Upcoming Events" / "Kommende Events"). Set it explicitly here to
+      # override for a custom header.
       nexusUrl: "https://nexus.eventky.app"
       eventkyBaseUrl: "https://eventky.app"
       maxEvents: 10

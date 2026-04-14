@@ -1,7 +1,9 @@
 // packages/core_services/help/constants.ts
 // Help - Single command service that shows a configurable help message with optional command list
 
-import type { DatasetSchemas, JSONSchema } from "@sdk/mod.ts";
+import { createI18n, type DatasetSchemas, escapeHtml, type JSONSchema } from "@sdk/mod.ts";
+import en from "./locales/en.ts";
+import de from "./locales/de.ts";
 
 // ============================================================================
 // Service Identity
@@ -29,6 +31,12 @@ export interface HelpConfig {
 	/** Whether to append the command list (default: true) */
 	showCommandList?: boolean;
 }
+
+// ============================================================================
+// i18n
+// ============================================================================
+
+const tRaw = createI18n({ en, de }, "en");
 
 // ============================================================================
 // JSON Schemas
@@ -93,24 +101,13 @@ export const HELP_DATASET_SCHEMAS: DatasetSchemas = {};
 // Helpers
 // ============================================================================
 
-/**
- * Escape HTML entities in user-provided text to prevent injection
- * and ensure valid HTML parse mode output.
- */
-function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-}
-
-export function formatHelpMessage(config: HelpConfig): string {
+export function formatHelpMessage(config: HelpConfig, locale?: string): string {
 	// Escape user-provided message to avoid breaking HTML parse mode
 	let text = escapeHtml(config.message);
 
 	const showCommands = config.showCommandList !== false;
 	if (showCommands && config.commands && config.commands.length > 0) {
-		text += "\n\n<b>Commands:</b>\n";
+		text += "\n\n" + tRaw("commands_header", undefined, locale ?? "en") + "\n";
 		text += config.commands
 			.map((c) => `${escapeHtml(c.command)} — ${escapeHtml(c.description)}`)
 			.join("\n");
@@ -124,7 +121,9 @@ export function formatHelpMessage(config: HelpConfig): string {
 // ============================================================================
 
 export const DEFAULT_CONFIG: HelpConfig = {
-	message: "Welcome! Here's what I can do:",
+	// Dead fallback — `message` is required by the schema so this never actually
+	// reaches a user. Kept as a structural default only.
+	message: "",
 	commands: [],
 	showCommandList: true,
 };

@@ -27,7 +27,7 @@ const service = defineService({
 		command: (ev: CommandEvent) => {
 			const rawConfig = ev.serviceConfig || {};
 			const config: HelpConfig = { ...DEFAULT_CONFIG, ...rawConfig };
-			const text = formatHelpMessage(config);
+			const text = formatHelpMessage(config, ev.language);
 
 			return reply(text, {
 				options: {

@@ -56,7 +56,7 @@ features:
     # admins pick which of these are visible in their chat via /config.
     allow_external_calendars: false
     config:
-      title: "Upcoming Events"
+      title: "Kommende Events"
       nexusUrl: "https://nexus.eventky.app"
       eventkyBaseUrl: "https://eventky.app"
       maxEvents: 20

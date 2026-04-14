@@ -1,7 +1,8 @@
 // packages/core_services/meetups/constants.ts
 // Meetups - Command flow service that displays upcoming events from Pubky calendars
 
-import type { DatasetSchemas, JSONSchema } from "@sdk/mod.ts";
+import { type DatasetSchemas, escapeHtml, type JSONSchema } from "@sdk/mod.ts";
+export { escapeHtml };
 
 // ============================================================================
 // Service Identity
@@ -342,16 +343,6 @@ export function parseEventUri(
 // ============================================================================
 
 /**
- * Escape HTML special characters for safe embedding in HTML messages.
- */
-export function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-}
-
-/**
  * Parse an ISO 8601 duration string (e.g., "PT3H", "PT1H30M", "P1D") into milliseconds.
  */
 export function parseDuration(duration: string): number | null {
@@ -611,7 +602,9 @@ export function buildCalendarHeader(
 
 export const DEFAULT_CONFIG: Partial<MeetupsConfig> = {
 	nexusUrl: "https://nexus.eventky.app",
-	title: "Upcoming Events",
+	// `title` intentionally omitted: when the operator doesn't set one,
+	// buildCalendarHeader falls through to defaultTitleFor(locale) so the
+	// header is localized ("Upcoming Events" / "Kommende Events").
 	maxEvents: 10,
 	showCalendarTitle: true,
 	linkEvents: true,

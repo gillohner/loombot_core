@@ -182,6 +182,18 @@ const en = {
 			},
 		},
 	},
+	adapter: {
+		photo_failed: "(photo failed)",
+		audio_failed: "(audio failed)",
+		video_failed: "(video failed)",
+		document_failed: "(document failed)",
+		location_fallback: "📍 Location: {{lat}}, {{lon}}",
+		contact_fallback: "👤 Contact: {{name}} - {{phone}}",
+		pubky_not_configured: "⚠️ Pubky publishing is not configured for this bot.",
+		pubky_queued: "📝 Your submission has been sent for review. You'll be notified once approved.",
+		pubky_queue_failed: "⚠️ Failed to submit. Please try again later.",
+		ui_choose_option: "Choose an option:",
+	},
 	pubky: {
 		button_approve: "✅ Approve",
 		button_reject: "❌ Reject",

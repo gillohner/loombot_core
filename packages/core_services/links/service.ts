@@ -13,19 +13,24 @@ import {
 	LINKS_VERSION,
 	type LinksConfig,
 	renderCategory,
+	tLinks,
 } from "./constants.ts";
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function buildCategoryKeyboard(categories: { name: string }[], serviceId: string) {
+function buildCategoryKeyboard(
+	categories: { name: string }[],
+	serviceId: string,
+	locale?: string,
+) {
 	const keyboard = UIBuilder.keyboard().namespace(serviceId);
 	for (const [idx, category] of categories.entries()) {
 		keyboard.callback(category.name, `c:${idx}`);
 		keyboard.row();
 	}
-	keyboard.callback("\u2716 Close", "close");
+	keyboard.callback(tLinks("close_button", locale), "close");
 	return keyboard.build();
 }
 
@@ -45,10 +50,11 @@ const service = defineService({
 		command: (ev: CommandEvent) => {
 			const rawConfig = ev.serviceConfig || {};
 			const config: LinksConfig = { ...DEFAULT_CONFIG, ...rawConfig };
+			const locale = ev.language;
 			const categories = getCategories(ev.datasets);
-			const kb = buildCategoryKeyboard(categories, LINKS_SERVICE_ID);
+			const kb = buildCategoryKeyboard(categories, LINKS_SERVICE_ID, locale);
 
-			return uiKeyboard(kb, config.title || "Select a category:", {
+			return uiKeyboard(kb, config.title || tLinks("default_title", locale), {
 				state: state.replace({ active: true }),
 				options: {
 					parse_mode: "HTML",
@@ -69,10 +75,11 @@ const service = defineService({
 
 			const rawConfig = ev.serviceConfig || {};
 			const config: LinksConfig = { ...DEFAULT_CONFIG, ...rawConfig };
+			const locale = ev.language;
 			const idx = Number(match[1]);
 			const categories = getCategories(ev.datasets);
-			const text = renderCategory(categories, idx);
-			const kb = buildCategoryKeyboard(categories, LINKS_SERVICE_ID);
+			const text = renderCategory(categories, idx, locale);
+			const kb = buildCategoryKeyboard(categories, LINKS_SERVICE_ID, locale);
 
 			return uiKeyboard(kb, text, {
 				state: state.replace({ active: true }),

@@ -1,7 +1,14 @@
 // packages/core_services/links/constants.ts
 // Links - Command flow service that displays categorized links with inline keyboard navigation
 
-import type { DatasetSchemas, JSONSchema } from "@sdk/mod.ts";
+import { createI18n, type DatasetSchemas, escapeHtml, type JSONSchema } from "@sdk/mod.ts";
+import en from "./locales/en.ts";
+import de from "./locales/de.ts";
+
+const tRaw = createI18n({ en, de }, "en");
+export function tLinks(key: string, locale?: string): string {
+	return tRaw(key, undefined, locale ?? "en");
+}
 
 // ============================================================================
 // Service Identity
@@ -150,7 +157,8 @@ export const DEFAULT_CATEGORIES: LinkCategory[] = [
 ];
 
 export const DEFAULT_CONFIG: LinksConfig = {
-	title: "Select a category:",
+	// `title` intentionally omitted — service falls back to
+	// tLinks("default_title", locale) when the operator doesn't set one.
 	disableLinkPreview: true,
 };
 
@@ -168,16 +176,13 @@ export function getCategories(datasets?: Record<string, unknown>): LinkCategory[
 	return DEFAULT_CATEGORIES;
 }
 
-function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-}
-
-export function renderCategory(categories: LinkCategory[], idx: number): string {
+export function renderCategory(
+	categories: LinkCategory[],
+	idx: number,
+	locale?: string,
+): string {
 	const cat = categories[idx];
-	if (!cat) return "Unknown category";
+	if (!cat) return tLinks("unknown_category", locale);
 	return `<b>${escapeHtml(cat.name)}</b>\n` +
 		cat.links.map((l) => `• <a href="${l.url}">${escapeHtml(l.title)}</a>`).join("\n");
 }

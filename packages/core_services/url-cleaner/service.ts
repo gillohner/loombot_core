@@ -1,8 +1,14 @@
 // packages/core_services/url-cleaner/service.ts
 // URL Cleaner - Listener service that cleans tracking parameters and offers alt frontends
-import { defineService, none, reply, runService } from "@sdk/mod.ts";
+import { createI18n, defineService, none, reply, runService } from "@sdk/mod.ts";
 import type { CallbackEvent, CommandEvent, MessageEvent } from "@sdk/mod.ts";
 import { TidyURL } from "npm:tidy-url@1";
+import enMessages from "./locales/en.ts";
+import deMessages from "./locales/de.ts";
+
+const tRaw = createI18n({ en: enMessages, de: deMessages }, "en");
+const tl = (locale: string | undefined, key: string, params?: Record<string, unknown>) =>
+	tRaw(key, params, locale ?? "en");
 import {
 	type AltFrontendMapping,
 	type AltFrontendsDataset,
@@ -165,6 +171,7 @@ interface ServiceConfig {
 function formatUrlResult(
 	result: ProcessedUrl,
 	config: ServiceConfig,
+	locale: string | undefined,
 ): string | null {
 	const parts: string[] = [];
 	const silentIfUnchanged = config.silentIfUnchanged ?? DEFAULT_CONFIG.silentIfUnchanged;
@@ -176,24 +183,25 @@ function formatUrlResult(
 
 	// Show original if configured
 	if (config.showOriginalUrl) {
-		parts.push(`📎 <b>Original:</b>\n<code>${result.original}</code>`);
+		parts.push(`${tl(locale, "label_original")}\n<code>${result.original}</code>`);
 	}
 
 	// Show cleaned URL if modified, or always alongside an alt-frontend
 	const showCleaned = config.showCleanedUrl ?? DEFAULT_CONFIG.showCleanedUrl;
 	if (showCleaned && result.wasModified) {
-		parts.push(`🧹 <b>Cleaned:</b>\n${result.cleaned}`);
+		parts.push(`${tl(locale, "label_cleaned")}\n${result.cleaned}`);
 	} else if (result.altFrontend && !result.wasModified) {
 		// Show direct URL alongside alt-frontend even if nothing was cleaned
-		parts.push(`🔗 <b>Direct:</b>\n${result.cleaned}`);
+		parts.push(`${tl(locale, "label_direct")}\n${result.cleaned}`);
 	}
 
 	// Show removed params if configured
 	if (result.wasModified && config.showRemovedParams && result.removedParams.length > 0) {
-		parts.push(`🗑️ <b>Removed:</b> ${result.removedParams.join(", ")}`);
+		parts.push(`${tl(locale, "label_removed")} ${result.removedParams.join(", ")}`);
 	}
 
-	// Show alt-frontend if available
+	// Show alt-frontend if available. Name comes from operator-configured dataset
+	// so it stays as-is; we just wrap it in the emoji prefix.
 	if (result.altFrontend) {
 		parts.push(`🔄 <b>${result.altFrontend.name}:</b>\n${result.altFrontend.url}`);
 	}
@@ -209,9 +217,13 @@ function formatUrlResult(
 /**
  * Format multiple URL results
  */
-function formatResults(results: ProcessedUrl[], config: ServiceConfig): string | null {
+function formatResults(
+	results: ProcessedUrl[],
+	config: ServiceConfig,
+	locale: string | undefined,
+): string | null {
 	const formatted = results
-		.map((r) => formatUrlResult(r, config))
+		.map((r) => formatUrlResult(r, config, locale))
 		.filter((r): r is string => r !== null);
 
 	if (formatted.length === 0) {
@@ -223,7 +235,9 @@ function formatResults(results: ProcessedUrl[], config: ServiceConfig): string |
 	}
 
 	// Multiple URLs - add separators
-	return formatted.map((r, i) => `<b>URL ${i + 1}:</b>\n${r}`).join("\n\n");
+	return formatted
+		.map((r, i) => `${tl(locale, "url_index", { n: i + 1 })}\n${r}`)
+		.join("\n\n");
 }
 
 // ============================================================================
@@ -286,7 +300,7 @@ const service = defineService({
 			const results = urlsToProcess.map((url) => processUrl(url, altFrontends.mappings));
 
 			// Format results
-			const message = formatResults(results, config);
+			const message = formatResults(results, config, ev.language);
 
 			if (!message) {
 				return none();
