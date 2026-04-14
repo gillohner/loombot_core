@@ -3,7 +3,7 @@
 // Uses direct host invocation (imports fetchEvents from the meetups service module).
 
 import { log } from "@core/util/logger.ts";
-import { listAllChatIds } from "@core/config/store.ts";
+import { listKnownChatIds } from "@core/config/store.ts";
 import { buildSnapshot } from "@core/snapshot/snapshot.ts";
 import { fetchEvents } from "../../../packages/core_services/meetups/service.ts";
 import {
@@ -258,7 +258,7 @@ export function startScheduler(botApi: SchedulerBotApi): void {
 	intervalId = setInterval(async () => {
 		let chatIds: string[];
 		try {
-			chatIds = listAllChatIds();
+			chatIds = listKnownChatIds();
 		} catch (err) {
 			log.error("scheduler.list_chats_error", { error: (err as Error).message });
 			return;

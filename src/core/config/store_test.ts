@@ -3,25 +3,11 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
 	closeDb,
 	deleteSnapshotByConfigHash,
-	getChatConfig,
 	initDb,
 	loadSnapshotByConfigHash,
 	saveSnapshotByConfigHash,
-	setChatConfig,
 } from "@core/config/store.ts";
 import type { RoutingSnapshot } from "@schema/routing.ts";
-
-Deno.test("config store set and get", () => {
-	initDb(":memory:");
-	setChatConfig("chat1", "default", { foo: 1 }, "hash-abc");
-	const rec = getChatConfig("chat1");
-	assert(rec);
-	assertEquals(rec?.config_id, "default");
-	assertEquals(rec?.config_hash, "hash-abc");
-	// deletion by config hash (no snapshot yet, should be no-op)
-	deleteSnapshotByConfigHash("hash-abc");
-	closeDb();
-});
 
 Deno.test("snapshot save/load/delete by config hash", () => {
 	initDb(":memory:");

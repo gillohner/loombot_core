@@ -1,26 +1,22 @@
 // src/core/config/store.ts
-// SQLite-backed storage for chat configuration records, snapshots, and service bundles.
+// SQLite-backed storage for routing snapshots, service bundles, per-chat
+// feature overrides, pending Pubky writes, and the periodic pin state.
 // Flow/session state intentionally remains purely in-memory.
 //
 // Schema (managed via migrations):
-// chat_configs(chat_id TEXT PK, config_id TEXT, config_json TEXT, config_hash TEXT, updated_at INTEGER)
-// snapshots_by_config(config_hash TEXT PK, snapshot_json TEXT, built_at INTEGER, integrity_hash TEXT)
-// service_bundles(bundle_hash TEXT PK, data_url TEXT, code TEXT, created_at INTEGER)
-// NOTE: Per-chat snapshot table removed in migration 2; we rely solely on config-hash snapshots for reuse.
+// chat_feature_overrides(chat_id, feature_id PK, enabled, data, updated_at)
+// snapshots_by_config(config_hash TEXT PK, snapshot_json, built_at, integrity_hash)
+// service_bundles(bundle_hash TEXT PK, data_url, code, created_at, has_npm)
+// pending_writes(id TEXT PK, ..., on_approval, on_rejection)
+// periodic_pin_state(chat_id TEXT PK, pinned_message_id, last_fired_slot, updated_at)
+// NOTE: The legacy `chat_configs` and `snapshots` tables from the pre-YAML
+// architecture are dropped in migrations 2 and 8.
 
 import { DB } from "sqlite";
 import { runMigrations } from "@core/config/migrations.ts";
 import type { RoutingSnapshot } from "@schema/routing.ts";
 
 let db: DB | null = null;
-
-export interface ChatConfigRecord {
-	chat_id: string;
-	config_id: string;
-	config_json: string;
-	config_hash: string | null;
-	updated_at: number;
-}
 
 export interface SnapshotRecord {
 	config_hash: string;
@@ -59,52 +55,17 @@ function ensureDb(): DB {
 }
 
 // ---------------------------------------------------------------------------
-// Chat Config
+// Known chats
 // ---------------------------------------------------------------------------
-export function setChatConfig(
-	chatId: string,
-	configId: string,
-	config: unknown,
-	configHash?: string,
-): void {
+// "Known" = has at least one row in chat_feature_overrides, meaning an admin
+// has opened /config at least once in that chat. The scheduler uses this to
+// decide which chats to walk when considering periodic broadcasts.
+
+export function listKnownChatIds(): string[] {
 	const database = ensureDb();
-	const now = Date.now();
-	const configJson = JSON.stringify(config ?? {});
-	database.query(
-		`INSERT INTO chat_configs (chat_id, config_id, config_json, config_hash, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(chat_id) DO UPDATE SET
-           config_id=excluded.config_id,
-           config_json=excluded.config_json,
-           config_hash=excluded.config_hash,
-           updated_at=excluded.updated_at`,
-		[chatId, configId, configJson, configHash ?? null, now],
+	const rows = database.query<[string]>(
+		`SELECT DISTINCT chat_id FROM chat_feature_overrides`,
 	);
-}
-
-export function getChatConfig(chatId: string): ChatConfigRecord | undefined {
-	const database = ensureDb();
-	const row = database
-		.query<[string, string, string, string | null, number]>(
-			`SELECT chat_id, config_id, config_json, config_hash, updated_at
-             FROM chat_configs WHERE chat_id = ?`,
-			[chatId],
-		)
-		.at(0);
-	if (!row) return undefined;
-	const [cid, cfgId, cfgJson, cfgHash, updated] = row;
-	return {
-		chat_id: cid,
-		config_id: cfgId,
-		config_json: cfgJson,
-		config_hash: cfgHash,
-		updated_at: updated,
-	};
-}
-
-export function listAllChatIds(): string[] {
-	const database = ensureDb();
-	const rows = database.query<[string]>(`SELECT chat_id FROM chat_configs`);
 	return rows.map((r) => r[0]);
 }
 
@@ -249,18 +210,13 @@ export function deleteSnapshotByConfigHash(configHash: string): void {
 
 /**
  * Clear all persisted snapshots. Called on process startup so that
- * code changes (--watch restart) or config changes are always picked up
- * on the first request, without requiring /updateconfig or DB deletion.
+ * code changes (--watch restart) or edits to config.yaml are always
+ * picked up on the first request, without any manual intervention.
  */
 export function clearAllSnapshots(): void {
 	const database = ensureDb();
 	database.query(`DELETE FROM snapshots_by_config`);
 }
-
-// ---------------------------------------------------------------------------
-// Chat-id keyed snapshots (auxiliary / debugging usage)
-// ---------------------------------------------------------------------------
-// (Removed) saveSnapshot/loadSnapshot/deleteSnapshot – replaced by config-hash keyed variants only.
 
 // ---------------------------------------------------------------------------
 // Service Bundles (content-addressed)

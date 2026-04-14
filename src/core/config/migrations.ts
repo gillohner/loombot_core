@@ -17,19 +17,10 @@ export const migrations: Migration[] = [
 		id: 1,
 		name: "baseline_schema",
 		up: (db: DB) => {
-			db.execute(`CREATE TABLE IF NOT EXISTS chat_configs (
-            chat_id TEXT PRIMARY KEY,
-            config_id TEXT NOT NULL,
-            config_json TEXT NOT NULL,
-            config_hash TEXT,
-            updated_at INTEGER NOT NULL
-        );`);
-			db.execute(`CREATE TABLE IF NOT EXISTS snapshots (
-            chat_id TEXT PRIMARY KEY,
-            snapshot_json TEXT NOT NULL,
-            built_at INTEGER NOT NULL,
-            integrity_hash TEXT NOT NULL
-        );`);
+			// Historical note: this migration used to also create `chat_configs`
+			// (dropped in migration 8) and `snapshots` (dropped in migration 2).
+			// Both are intentionally gone. New installs go straight to the
+			// current schema; existing installs hit the later drop migrations.
 			db.execute(`CREATE TABLE IF NOT EXISTS snapshots_by_config (
             config_hash TEXT PRIMARY KEY,
             snapshot_json TEXT NOT NULL,
@@ -136,6 +127,22 @@ export const migrations: Migration[] = [
 				db.execute(`ALTER TABLE pending_writes ADD COLUMN on_rejection TEXT;`);
 			} catch (_err) {
 				// Column might already exist
+			}
+		},
+	},
+	{
+		id: 8,
+		name: "drop_chat_configs_table",
+		up: (db: DB) => {
+			// chat_configs was the persistence layer for the old /setconfig
+			// template-selection command. The new architecture is a single
+			// operator-owned config.yaml + per-chat overrides in
+			// chat_feature_overrides. Nothing writes to chat_configs anymore,
+			// and keeping it around was fooling the scheduler's chat enumeration.
+			try {
+				db.execute(`DROP TABLE IF EXISTS chat_configs;`);
+			} catch (_err) {
+				// ignore
 			}
 		},
 	},
