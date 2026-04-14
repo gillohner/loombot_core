@@ -15,8 +15,8 @@ stdin/stdout JSON.
 - **Testing:** `deno test`
 - **Dev:** `deno task dev` (polling mode with --watch)
 - **Prod:** `deno task serve` (webhook mode)
-- **Fresh start:** Snapshots auto-clear on restart; `/updateconfig` re-fetches from homeserver.
-  Deleting `bot.sqlite` is rarely needed.
+- **Fresh start:** Snapshots auto-clear on every process start. Edit `config.yaml` and restart the
+  bot to pick up changes. Deleting `bot.sqlite` is rarely needed.
 
 ## Architecture
 
@@ -35,47 +35,60 @@ Telegram → grammY Bot → Router Middleware → Dispatcher
 ### Core Flow
 
 1. Telegram update arrives (polling or webhook)
-2. Router handles admin commands (`/start`, `/setconfig`, `/updateconfig`) or dispatches to services
+2. Router handles admin commands (`/start`, `/config`) or dispatches to services
 3. Dispatcher loads routing snapshot for the chat, finds matching service route
 4. Service bundle (pre-bundled SDK + service code) runs in isolated Deno subprocess
 5. Service returns `ServiceResponse` via stdout JSON
 6. Response adapter converts to Telegram API calls
 
+Per-chat configuration happens via the inline `/config` menu (admin-only), which writes feature
+toggles and overrides into the `chat_feature_overrides` table. The operator-level defaults live in
+`config.yaml` and are loaded once at startup.
+
 ## Project Structure
 
 ```
 src/
-├── main.ts                    # Entry point (polling vs webhook)
-├── bot.ts                     # Bot init, middleware composition
+├── main.ts                        # Entry point (polling vs webhook)
+├── bot.ts                         # Bot init, middleware composition
 ├── core/
-│   ├── config.ts              # Environment config
-│   ├── config/store.ts        # SQLite persistence (configs, snapshots, bundles)
-│   ├── config/migrations.ts   # DB schema management
-│   ├── dispatch/dispatcher.ts # Event routing → sandbox execution → state mgmt
-│   ├── sandbox/host.ts        # Deno subprocess with zero permissions
-│   ├── snapshot/snapshot.ts   # Config → routing table, caching (memory + SQLite)
-│   ├── state/state.ts         # In-memory state (chatId+userId+serviceId keyed)
-│   ├── pubky/pubky.ts         # Config fetching from Pubky homeserver
-│   ├── pubky/writer.ts        # Admin-approval write queue
-│   ├── pubky/writer_store.ts  # Writer SQLite persistence
-│   ├── ttl/store.ts           # Message auto-deletion scheduling
+│   ├── config.ts                  # Process-wide env flags (NODE_ENV, DEBUG, …)
+│   ├── config/loader.ts           # Parse + validate config.yaml at startup
+│   ├── config/schema.ts           # Zod schema for config.yaml
+│   ├── config/runtime.ts          # Loaded operator-config singleton + hash
+│   ├── config/merge.ts            # Resolve per-chat effective feature list (operator + overrides)
+│   ├── config/store.ts            # SQLite persistence (overrides, snapshots, bundles, writes, pins)
+│   ├── config/migrations.ts       # DB schema migrations
+│   ├── dispatch/dispatcher.ts     # Event routing → sandbox execution → state mgmt
+│   ├── sandbox/host.ts            # Deno subprocess with zero permissions
+│   ├── snapshot/snapshot.ts       # Effective config → routing table, caching
+│   ├── scheduler/scheduler.ts     # Periodic meetups broadcast loop
+│   ├── scheduler/pin_store.ts     # SQLite-backed pin + last-fired tracking
+│   ├── state/state.ts             # In-memory state (chatId+userId+serviceId keyed)
+│   ├── pubky/pubky.ts             # Re-export shim for calendar_meta helpers
+│   ├── pubky/calendar_meta.ts     # Fetches calendar metadata from Pubky (used by /config)
+│   ├── pubky/writer.ts            # Admin-approval write queue
+│   ├── pubky/writer_store.ts      # Writer SQLite persistence
+│   ├── ttl/store.ts               # Message auto-deletion scheduling
 │   └── util/
-│       ├── bundle.ts          # Inline SDK + service into data URL
-│       ├── logger.ts          # Structured JSON logging
-│       └── npm_allowlist.ts   # Allowed npm packages for services
+│       ├── bundle.ts              # Inline SDK + service into a single file
+│       ├── logger.ts              # Structured JSON logging
+│       └── npm_allowlist.ts       # Allowed npm packages for services
 ├── middleware/
-│   ├── router.ts              # Command routing, admin commands
-│   ├── response.ts            # ServiceResponse → Telegram API
-│   └── admin.ts               # Permission checks
+│   ├── router.ts                  # Command routing, admin commands
+│   ├── response.ts                # ServiceResponse → Telegram API
+│   ├── admin.ts                   # Permission checks
+│   └── config_ui/                 # /config inline menu: features, calendars, welcome, periodic
+├── services/
+│   └── registry.ts                # Operator-shipped service registry
 ├── adapters/
-│   ├── registry.ts            # Service registry
 │   └── telegram/
-│       ├── adapter.ts         # Telegram API integration
-│       └── ui_converter.ts    # UI abstraction → Telegram format
+│       ├── adapter.ts             # Telegram API integration
+│       └── ui_converter.ts        # UI abstraction → Telegram format
 └── types/
-    ├── routing.ts             # RoutingSnapshot, CommandRoute, ListenerRoute
-    ├── sandbox.ts             # ExecutePayload, sandbox types
-    └── services.ts            # Service protocol types
+    ├── routing.ts                 # RoutingSnapshot, CommandRoute, ListenerRoute
+    ├── sandbox.ts                 # ExecutePayload, sandbox types
+    └── services.ts                # Service protocol types
 
 packages/
 ├── sdk/                       # Service SDK (bundled into every service)
@@ -159,9 +172,8 @@ Routing snapshots map commands → service bundles. Three-layer cache:
 3. Content-addressed bundles (SHA-256 deduplication)
 
 On startup, all persisted snapshots are wiped so the first request triggers a fresh build. This
-means code changes (via `--watch`) and homeserver config changes are always picked up without
-needing to delete `bot.sqlite` or call `/updateconfig`. Use `/updateconfig` only to pick up config
-changes without restarting the bot.
+means code changes (via `--watch`) and edits to `config.yaml` are always picked up without needing
+to delete `bot.sqlite`. To pick up `config.yaml` changes, restart the bot.
 
 ### State Management
 
@@ -183,66 +195,77 @@ Services can call `pubkyWrite(path, data, preview)` to write to Pubky homeserver
 
 ### Admin Permissions
 
-- `BOT_ADMIN_IDS` — comma-separated Telegram user IDs, always admin in any chat
-- `LOCK_DM_CONFIG` — when `1`, only `BOT_ADMIN_IDS` can `/setconfig` in DMs; when `0` (default), any
-  DM user is admin
-- In groups: Telegram chat admins + `BOT_ADMIN_IDS` can use admin commands
-- Admin check logic lives in `src/middleware/admin.ts`
+- `bot.admin_ids` in `config.yaml` — comma-separated Telegram user IDs, always admin in any chat.
+  Can be overridden at runtime via the `BOT_ADMIN_IDS` env var.
+- `bot.lock_dm_config` — when `true`, only the super-admins above can use `/config` in DMs; when
+  `false` (default), any user is admin of their own DM.
+- In groups: Telegram chat admins + the super-admins can use admin commands.
+- Admin check logic lives in `src/middleware/admin.ts`.
 
-### Configuration Templates
+### Configuration
 
-Bot configs define which services are active per chat. Sources:
+Bot configuration is defined by a single operator-owned `config.yaml` loaded at startup. The top
+level has three sections: `bot` (admin ids, DM lock), `pubky` (optional keypair + approval group for
+services that publish events), and `features` (a dictionary of feature id → service config with
+`groups` / `dms` toggles, locks, command name, config blob, datasets).
 
-- Built-in templates: `default`, `modular`, `fake`, `bad`
-- File paths: `./path/to/config.json`
-- Pubky URLs: `pubky://pk/pub/bot_builder/configs/id.json` (modular configs from web configurator)
+Chat admins customise per-chat via the inline `/config` menu, which writes into the
+`chat_feature_overrides` table. Supported override shapes today:
 
-Per-chat config stored in SQLite, switchable via `/setconfig <id>`.
+- Any feature: `enabled` toggle (unless `lock: true` in `config.yaml`)
+- `meetups`: `selected_calendar_ids`, `external_calendars`, and a `periodic` block (enabled / day /
+  hour / timezone / range / pin / unpin_previous) overriding the matching operator defaults
+- `new_member`: `welcome_override` (replaces the default welcome message)
 
-Modular config resolution (`resolveModularBotConfig` in `pubky.ts`):
+`resolveChatConfig()` in `src/core/config/merge.ts` is the single source of truth for "what features
+are live in this chat right now" — both the snapshot builder and the `/config` UI call it.
 
-1. Fetches bot config from Pubky URL
-2. Resolves each `ServiceReference.serviceConfigRef` → fetches service config
-3. Merges overrides (command, config, datasets)
-4. Normalizes calendars — converts plain URI strings to `{ uri }` objects, normalizes malformed URIs
-5. Enriches calendar names by fetching from Pubky homeserver (for any calendar missing a `name`
-   field)
-6. Returns combined services + listeners for snapshot building
+Two example profiles live in `configs/`:
+
+- `configs/general-purpose.example.yaml` — no Pubky identity, sensible defaults
+- `configs/dezentralschweiz.example.yaml` — Pubky-enabled, Swiss bitcoin community profile
+
+Copy one to `config.yaml` and edit it. Run `deno task config:check` to validate.
 
 ## SQLite Tables
 
-- `chat_configs` — per-chat config template selection
-- `snapshots_by_config` — cached routing snapshots by config hash
+- `chat_feature_overrides` — per-chat feature toggles and config-blob overrides (source of truth for
+  "known chats" — the scheduler enumerates chats via DISTINCT chat_id here)
+- `snapshots_by_config` — cached routing snapshots keyed by config hash
 - `service_bundles` — content-addressed bundled service code
 - `ttl_messages` — scheduled message auto-deletion
-- `pubky_pending_writes` — admin approval queue
+- `pending_writes` — Pubky write admin-approval queue (plus `on_approval` / `on_rejection` hooks)
+- `periodic_pin_state` — scheduler's per-chat last-pinned message id + last-fired slot
 
 ## Environment Variables
 
+Runtime-only flags (process-level, not per-chat):
+
 ```bash
-BOT_TOKEN                  # Required: Telegram bot token
-NODE_ENV                   # development | production
-DEBUG                      # 0 | 1
-LOG_MIN_LEVEL              # debug | info | warn | error
-LOG_PRETTY                 # 0 | 1
-DEFAULT_TEMPLATE_ID        # Config template or pubky:// URL (default: "default")
-WEBHOOK                    # 0 (polling) | 1 (webhook)
-LOCAL_DB_URL               # SQLite path (default: ./bot.sqlite)
-BOT_ADMIN_IDS              # Comma-separated Telegram user IDs (super-admins everywhere)
-LOCK_DM_CONFIG             # 1 = lock DM config to DEFAULT_TEMPLATE_ID, 0 = open (default)
-PUBKY_RECOVERY_FILE        # Path to .pkarr keypair file
-PUBKY_PASSPHRASE           # Passphrase for keypair
-PUBKY_ADMIN_GROUP          # Telegram group ID for write approvals
-PUBKY_APPROVAL_TIMEOUT     # Seconds (default: 86400)
-DEFAULT_MESSAGE_TTL        # Auto-delete seconds (0 = disabled)
-ENABLE_DELETE_PINNED       # 0 | 1
+BOT_TOKEN                       # Required: Telegram bot token
+NODE_ENV                        # development | production
+DEBUG                           # 0 | 1
+LOG_MIN_LEVEL                   # debug | info | warn | error
+LOG_PRETTY                      # 0 | 1
+WEBHOOK                         # 0 (polling) | 1 (webhook)
+LOCAL_DB_URL                    # SQLite path (default: ./bot.sqlite)
+CONFIG_FILE                     # YAML path (default: ./config.yaml)
+DEFAULT_MESSAGE_TTL              # Auto-delete seconds (0 = disabled)
+ENABLE_DELETE_PINNED            # 0 | 1
+PUBKY_PASSPHRASE                # Passphrase for the recovery keypair (Pubky-enabled profiles)
 ```
 
-## Companion Project
+Config-file overrides (optional, so Docker/Umbrel deployments can patch `config.yaml` without
+editing it):
 
-The **Pubky Bot Configurator** (`../pubky_bot_configurator/`) is a Next.js web UI that lets users
-create and manage bot configs, service configs, and datasets on their Pubky homeserver. The bot
-reads those configs at runtime.
+```bash
+BOT_ADMIN_IDS                   # Comma-separated Telegram user IDs → bot.admin_ids
+LOCK_DM_CONFIG                  # 1|true|yes|on → bot.lock_dm_config
+PUBKY_ENABLED                   # 1|true|yes|on → pubky.enabled
+PUBKY_RECOVERY_FILE             # Path to .pkarr recovery file → pubky.recovery_file
+PUBKY_APPROVAL_GROUP_CHAT_ID    # Telegram group id → pubky.approval_group_chat_id
+PUBKY_APPROVAL_TIMEOUT_HOURS    # Integer hours → pubky.approval_timeout_hours
+```
 
 ## Bundler System (`src/core/util/bundle.ts`)
 
@@ -328,8 +351,8 @@ The public key is a 52-character z-base-32 string (NO "pubky" prefix).
 - The SDK is fully inlined into service bundles — changes to `packages/sdk/` affect all services
 - npm packages in services must be on the allowlist (`src/core/util/npm_allowlist.ts`)
 - Tests: `deno task test` — uses Deno's built-in test runner
-- `/updateconfig` re-fetches config from Pubky homeserver and force-rebuilds snapshot (use when
-  config changes without restarting)
+- Config validation: `deno task config:check <path>` — parses a YAML profile through the loader
+  without booting the bot
 - `dispatch.miss` logs at debug level (hidden at default info level) — set `LOG_MIN_LEVEL=debug` to
   see routing misses
 - **Never use dynamic `import()` in services** — the bundler only handles static imports. Dynamic

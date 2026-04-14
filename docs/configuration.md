@@ -1,387 +1,192 @@
 # Configuration Guide
 
-This guide covers how to configure the Pubky Bot Builder, including environment variables, bot
-configuration templates, and service settings.
+Bot configuration is a single operator-owned `config.yaml` loaded at startup, plus per-chat
+overrides that chat admins set via the inline `/config` menu.
 
-## Environment Variables
+## Getting started
 
-Create a `.env.local` file (copy from `.env.example`):
+Copy one of the example profiles from `configs/` to the project root as `config.yaml` and edit it. A
+`.env.local` file supplies runtime flags like `BOT_TOKEN`.
 
 ```bash
+cp configs/general-purpose.example.yaml config.yaml
 cp .env.example .env.local
+# edit both, then:
+deno task config:check   # validate the YAML + its feature references
+deno task dev            # run in polling mode
 ```
 
-### Required Variables
+Two example profiles ship in `configs/`:
 
-| Variable    | Description                                                  |
-| ----------- | ------------------------------------------------------------ |
-| `BOT_TOKEN` | Telegram bot token from [@BotFather](https://t.me/BotFather) |
+- `general-purpose.example.yaml` — no Pubky identity, sensible defaults. Good starting point.
+- `dezentralschweiz.example.yaml` — Pubky-enabled, Swiss bitcoin community profile with a full set
+  of services wired up. Useful reference for the feature schema.
 
-### Optional Variables
+## config.yaml structure
 
-| Variable               | Default       | Description                                             |
-| ---------------------- | ------------- | ------------------------------------------------------- |
-| `NODE_ENV`             | `development` | Environment mode (`development` or `production`)        |
-| `DEBUG`                | `0`           | Enable debug logging (`1` to enable)                    |
-| `LOG_MIN_LEVEL`        | `info`        | Minimum log level: `debug`, `info`, `warn`, `error`     |
-| `LOG_PRETTY`           | `0`           | Pretty-print JSON logs (`1` to enable)                  |
-| `DEFAULT_TEMPLATE_ID`  | `default`     | Default configuration template ID                       |
-| `WEBHOOK`              | `0`           | Use webhook mode instead of polling (`1` to enable)     |
-| `ENABLE_DELETE_PINNED` | `0`           | Allow deleting pinned messages (`1` to enable)          |
-| `DEFAULT_MESSAGE_TTL`  | `0`           | Auto-delete bot messages after N seconds (0 = disabled) |
+```yaml
+bot:
+  admin_ids: [123456789] # super-admins everywhere
+  lock_dm_config: false # true → only super-admins can /config in DMs
 
-## Bot Configuration Templates
+pubky: # optional — needed if any feature publishes to Pubky
+  enabled: true
+  recovery_file: ./secrets/op.pkarr
+  passphrase_env: PUBKY_PASSPHRASE
+  approval_group_chat_id: -1001234567890
+  approval_timeout_hours: 24
 
-Configuration templates define which services are available to the bot. The bot ships with a
-`default` template, but you can create custom configurations.
-
-### Template Structure
-
-```json
-{
-	"configId": "my_custom_config",
-	"services": [
-		{
-			"name": "Service Name",
-			"command": "commandname",
-			"kind": "single_command",
-			"entry": "./path/to/service.ts",
-			"version": "1.0.0",
-			"config": {},
-			"datasets": {}
-		}
-	],
-	"listeners": []
-}
+features:
+  <feature_id>:
+    service: <service_name> # must match a registered service in src/services/registry.ts
+    groups: true # enabled by default in groups
+    dms: true # enabled by default in DMs
+    lock: false # true → chat admins cannot toggle this via /config
+    command: mycommand # optional, defaults to <feature_id>
+    config: { ... } # arbitrary, validated by the service's configSchema
+    datasets: { ... } # optional, inline datasets
+    allow_external_calendars: false # meetups-only: allow chat admins to add pubky:// URIs
 ```
 
-### Configuration Fields
+### Feature fields
 
-#### Top-Level Fields
+| Field                      | Required | Description                                                        |
+| -------------------------- | -------- | ------------------------------------------------------------------ |
+| `service`                  | yes      | Name of a service from `src/services/registry.ts`                  |
+| `groups`                   | no       | Enabled in groups/supergroups (default `true`)                     |
+| `dms`                      | no       | Enabled in private chats (default `false`)                         |
+| `lock`                     | no       | If `true`, chat admins cannot override `enabled` via /config       |
+| `command`                  | no       | Command name (without `/`), defaults to the feature id             |
+| `config`                   | no       | Service config blob — shape defined by the service                 |
+| `datasets`                 | no       | Named dataset payloads passed to the service                       |
+| `allow_external_calendars` | no       | `meetups` only — let chat admins add external `pubky://` calendars |
 
-| Field       | Required | Description                              |
-| ----------- | -------- | ---------------------------------------- |
-| `configId`  | Yes      | Unique identifier for this configuration |
-| `services`  | Yes      | Array of command/flow services           |
-| `listeners` | No       | Array of listener services               |
+You can have multiple features pointing at the same underlying service with different configs (e.g.
+two independent `triggerwords` instances with different word lists).
 
-#### Service Definition Fields
+## Per-chat overrides
 
-| Field      | Required | Description                                                   |
-| ---------- | -------- | ------------------------------------------------------------- |
-| `name`     | Yes      | Human-readable service name                                   |
-| `command`  | Yes      | Command trigger (without `/`)                                 |
-| `kind`     | Yes      | Service type: `single_command`, `command_flow`, or `listener` |
-| `entry`    | Yes      | Path to service TypeScript file                               |
-| `version`  | No       | Service version string                                        |
-| `config`   | No       | Custom configuration object passed to service                 |
-| `datasets` | No       | Named dataset mappings (name → URL)                           |
+Chat admins run `/config` in any chat (admin-only) to open an inline menu that writes into the
+`chat_feature_overrides` table. Supported override shapes today:
 
-### Example Configurations
+| Feature      | Override shape                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| _any_        | `enabled` toggle (ignored if `lock: true` in `config.yaml`)                                     |
+| `meetups`    | `selected_calendar_ids`, `external_calendars`, `periodic` block (enabled/day/hour/tz/range/pin) |
+| `new_member` | `welcome_override` (replaces `config.message`)                                                  |
 
-#### Minimal Configuration
+`resolveChatConfig()` in `src/core/config/merge.ts` is the single source of truth for "what is live
+in this chat". It merges the operator defaults with the chat's overrides and produces a
+`ResolvedFeature[]` list that the snapshot builder and the `/config` UI both consume.
 
-```json
-{
-	"configId": "minimal",
-	"services": [
-		{
-			"name": "Simple Response",
-			"command": "hello",
-			"kind": "single_command",
-			"entry": "./packages/core_services/simple-response/service.ts"
-		}
-	]
-}
-```
+## Environment variables
 
-#### Full-Featured Configuration
+Runtime-only flags (process-level, set in `.env.local` or the Docker environment):
 
-```json
-{
-	"configId": "full_featured",
-	"services": [
-		{
-			"name": "Simple Response",
-			"command": "hello",
-			"kind": "single_command",
-			"entry": "./packages/core_services/simple-response/service.ts",
-			"version": "1.0.0",
-			"config": {
-				"greeting": "Welcome to our bot!"
-			}
-		},
-		{
-			"name": "Help",
-			"command": "help",
-			"kind": "single_command",
-			"entry": "./packages/core_services/help/service.ts",
-			"version": "1.0.0"
-		},
-		{
-			"name": "Resource Links",
-			"command": "links",
-			"kind": "single_command",
-			"entry": "./packages/core_services/links/service.ts"
-		}
-	],
-	"listeners": [
-		{
-			"name": "Trigger Words",
-			"command": "triggerwords",
-			"kind": "listener",
-			"entry": "./packages/core_services/triggerwords/service.ts"
-		}
-	]
-}
-```
+| Variable               | Default         | Description                                        |
+| ---------------------- | --------------- | -------------------------------------------------- |
+| `BOT_TOKEN`            | _required_      | Telegram bot token                                 |
+| `NODE_ENV`             | `development`   | `development` or `production`                      |
+| `DEBUG`                | `0`             | Enable debug logging                               |
+| `LOG_MIN_LEVEL`        | `info`          | `debug`, `info`, `warn`, `error`                   |
+| `LOG_PRETTY`           | `0`             | Pretty-print logs instead of JSON                  |
+| `WEBHOOK`              | `0`             | `1` → webhook mode, `0` → polling                  |
+| `CONFIG_FILE`          | `./config.yaml` | Path to the operator config file                   |
+| `LOCAL_DB_URL`         | `./bot.sqlite`  | SQLite database path                               |
+| `DEFAULT_MESSAGE_TTL`  | `0`             | Auto-delete bot messages after N seconds (0 = off) |
+| `ENABLE_DELETE_PINNED` | `0`             | Allow the bot to delete pinned messages            |
+| `PUBKY_PASSPHRASE`     | —               | Passphrase for the Pubky recovery keypair          |
 
-## Service Configuration
+Optional config-file overrides (let Docker/Umbrel/Start9 installs patch `config.yaml` without
+editing the file):
 
-### Passing Config to Services
+| Variable                       | Patches                           |
+| ------------------------------ | --------------------------------- |
+| `BOT_ADMIN_IDS`                | `bot.admin_ids` (comma-separated) |
+| `LOCK_DM_CONFIG`               | `bot.lock_dm_config`              |
+| `PUBKY_ENABLED`                | `pubky.enabled`                   |
+| `PUBKY_RECOVERY_FILE`          | `pubky.recovery_file`             |
+| `PUBKY_APPROVAL_GROUP_CHAT_ID` | `pubky.approval_group_chat_id`    |
+| `PUBKY_APPROVAL_TIMEOUT_HOURS` | `pubky.approval_timeout_hours`    |
 
-Configuration is available in the event context:
+## Passing config to services
+
+Services receive their merged feature config on every event:
 
 ```typescript
-// In your service
 function handleCommand(ev: CommandEvent) {
 	const config = ev.serviceConfig as MyConfigType;
-	const value = config?.myOption ?? "default";
+	const greeting = config?.greeting ?? "Hello!";
 	// ...
 }
 ```
 
-### Configuration in Template
-
-```json
-{
-	"name": "Configurable Service",
-	"command": "myservice",
-	"kind": "single_command",
-	"entry": "./services/myservice/service.ts",
-	"config": {
-		"greeting": "Hello!",
-		"maxRetries": 3,
-		"features": {
-			"enableLogging": true,
-			"theme": "dark"
-		}
-	}
-}
-```
+The `config` blob in `config.yaml` is validated against the service's `configSchema` when the
+snapshot is built. Invalid configs cause the feature to fail to load with a clear error.
 
 ## Datasets
 
-Datasets allow services to access external data. They're loaded at snapshot build time and passed to
-services.
+Datasets are large or structured data passed into a service alongside its config. Define them inline
+under the feature in `config.yaml`:
 
-### Local Datasets
-
-Place JSON files in a `datasets/` folder alongside your service:
-
-```
-my_service/
-├── service.ts
-├── constants.ts
-└── datasets/
-    ├── items.json
-    └── categories.json
-```
-
-Datasets are auto-discovered and available via `ev.datasets`:
-
-```typescript
-function handleCommand(ev: CommandEvent) {
-	const items = ev.datasets?.items as ItemData;
-	// ...
-}
+```yaml
+features:
+  shitcoin_alarm:
+    service: triggerwords
+    config: { responseProbability: 1, cooldownSeconds: 60 }
+    datasets:
+      triggers:
+        version: "1.0.0"
+        entries:
+          - matchMode: word
+            triggers: [solana, cardano, ...]
+            responses: ["Not in this chat."]
 ```
 
-### Remote Datasets (Pubky)
+In the service, access via `ev.datasets.triggers`. Each service declares its expected dataset shapes
+via `datasetSchemas` in its manifest and the loader validates them at startup.
 
-Reference datasets via Pubky URLs:
+## Admin commands
 
-```json
-{
-	"name": "My Service",
-	"command": "myservice",
-	"kind": "single_command",
-	"entry": "./services/myservice/service.ts",
-	"config": {
-		"datasets": {
-			"products": "pubky://abc123.../pub/myapp/products.json"
-		}
-	}
-}
-```
+| Command   | Description                                                       |
+| --------- | ----------------------------------------------------------------- |
+| `/start`  | (Re)publish the bot's command list for this chat                  |
+| `/config` | Admin-only inline menu for per-chat feature toggles and overrides |
 
-## Per-Chat Configuration
+Admins are determined by `bot.admin_ids` (super-admins everywhere) plus Telegram chat admins in
+groups. In private chats, any user is admin of their own DM unless `bot.lock_dm_config: true`, in
+which case only super-admins can `/config`.
 
-Admins can change the bot configuration for specific chats using:
+## Snapshot caching
 
-```
-/setconfig <config_id>
-```
+Routing snapshots (config → command/listener routing table) are cached by `config_hash` in the
+`snapshots_by_config` SQLite table and in memory with a 10s TTL. All persisted snapshots are wiped
+on every process start, so code changes (`--watch`) and `config.yaml` edits are always picked up on
+the next request.
 
-The bot will:
+To force a rebuild without restarting, toggle any feature in `/config` and toggle it back — the hash
+changes and the next request rebuilds from scratch.
 
-1. Validate the config ID exists
-2. Rebuild the routing snapshot
-3. Update available commands
-4. Persist the choice
+## SQLite tables
 
-```mermaid
-sequenceDiagram
-    participant Admin
-    participant Bot
-    participant Store
-    
-    Admin->>Bot: /setconfig premium
-    Bot->>Store: Validate config exists
-    Store-->>Bot: Config found
-    Bot->>Store: Save chat config
-    Bot->>Bot: Rebuild snapshot
-    Bot->>Admin: ✅ Config updated
-```
-
-## Built-in Templates
-
-The bot includes these built-in templates:
-
-### `default`
-
-Standard configuration with core services:
-
-- `/hello` - Simple response greeting
-- `/help` - Help information
-- `/links` - Categorized links
-- Trigger words listener - Auto-responds to configured keywords
-
-### Creating Custom Templates
-
-1. Create a JSON file with your configuration
-2. Reference it by path or upload to Pubky storage
-3. Use `/setconfig <path_or_url>` to apply
-
-## Admin Commands
-
-These commands are available to chat administrators:
-
-| Command           | Description                                |
-| ----------------- | ------------------------------------------ |
-| `/start`          | Initialize bot and show available commands |
-| `/setconfig <id>` | Change bot configuration template          |
-| `/updateconfig`   | Force refresh current configuration        |
-
-## Configuration Sources
-
-Configuration can be loaded from multiple sources:
-
-```mermaid
-flowchart TD
-    A[Config Request] --> B{Source Type?}
-    B -->|Built-in| C[Templates Registry]
-    B -->|Local File| D[File System]
-    B -->|Remote| E[Pubky Storage]
-    
-    C --> F[Parse & Validate]
-    D --> F
-    E --> F
-    
-    F --> G[Build Snapshot]
-    G --> H[Cache & Store]
-```
-
-### Built-in Templates
-
-Use the template ID directly:
-
-```
-/setconfig default
-```
-
-### Pubky URLs
-
-Reference remote configurations:
-
-```
-/setconfig pubky://abc123.../pub/botconfig/premium.json
-```
-
-## Snapshot Caching
-
-The bot caches routing snapshots for performance:
-
-1. **In-memory cache** - 10 second TTL
-2. **SQLite persistence** - Keyed by config hash
-3. **Integrity verification** - SHA-256 checksum
-
-Force a refresh with:
-
-```
-/updateconfig
-```
-
-Or programmatically:
-
-```typescript
-await buildSnapshot(chatId, { force: true });
-```
-
-## Database Schema
-
-Configuration is stored in SQLite:
-
-```sql
--- Chat-specific configuration
-CREATE TABLE chat_configs (
-    chat_id TEXT PRIMARY KEY,
-    config_id TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
-);
-
--- Cached snapshots
-CREATE TABLE snapshots (
-    config_hash TEXT PRIMARY KEY,
-    snapshot_json TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-);
-
--- Service bundles (content-addressed)
-CREATE TABLE bundles (
-    bundle_hash TEXT PRIMARY KEY,
-    data_url TEXT NOT NULL,
-    code TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-);
-```
-
-## Security Considerations
-
-1. **Config validation** - All configurations are validated before use
-2. **Sandbox isolation** - Services can't access config of other services
-3. **Admin-only changes** - Only admins can modify chat configuration
-4. **No secrets in config** - Never put API keys or tokens in service config
+| Table                    | Purpose                                                             |
+| ------------------------ | ------------------------------------------------------------------- |
+| `chat_feature_overrides` | Per-chat feature toggles and override data (calendars, periodic, …) |
+| `snapshots_by_config`    | Cached routing snapshots keyed by config hash                       |
+| `service_bundles`        | Content-addressed bundled service code                              |
+| `ttl_messages`           | Scheduled message auto-deletions                                    |
+| `pending_writes`         | Pubky write admin-approval queue                                    |
+| `periodic_pin_state`     | Scheduler per-chat last-pinned message id + last-fired slot         |
 
 ## Troubleshooting
 
-### Config not loading
-
-1. Check the config ID/URL is valid
-2. Verify JSON syntax is correct
-3. Check service entry paths exist
-4. Review logs for errors: `LOG_MIN_LEVEL=debug deno task dev`
-
-### Services not appearing
-
-1. Ensure `kind` is valid (`single_command`, `command_flow`, `listener`)
-2. Check `command` is unique and doesn't conflict
-3. Verify `entry` path is accessible
-4. Run `/start` to refresh command list
-
-### State not persisting
-
-1. Verify `kind` is `command_flow` (not `single_command`)
-2. Ensure you're returning `state` in responses
-3. Check the flow isn't being cleared prematurely
-4. Different users have separate state
+- **Config not loading:** `deno task config:check <path>` runs the YAML through the loader and
+  prints the first validation error.
+- **Feature not appearing in a chat:** check `groups` / `dms` in `config.yaml`, check whether
+  `lock: true` is preventing an override, and check the chat's `chat_feature_overrides` row with
+  `sqlite3 bot.sqlite "SELECT * FROM chat_feature_overrides WHERE chat_id = ?;"`.
+- **Pubky feature auto-disabled:** any feature whose service requires Pubky writes (e.g.
+  `event_creator`) is silently disabled when `pubky.enabled: false`. Watch for
+  `config.feature.auto_disabled_no_pubky` log lines at startup.
+- **State not persisting:** only `command_flow` services have persistent state (scoped to
+  `chatId + userId + serviceId`, in-memory, lost on restart). `single_command` services don't.

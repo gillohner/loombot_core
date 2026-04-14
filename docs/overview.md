@@ -138,7 +138,8 @@ The bot initializes with grammY and connects to Telegram. It supports two modes:
 Routes incoming Telegram updates to the appropriate handlers:
 
 - `/start` - Initializes commands for the chat
-- `/setconfig <id>` - Admin command to change bot configuration
+- `/config` - Admin-only inline menu for per-chat feature overrides (see
+  `src/middleware/config_ui/`)
 - Service commands - Dispatched to the service sandbox
 
 ### 3. Dispatcher (`src/core/dispatch/dispatcher.ts`)
@@ -457,104 +458,86 @@ if (import.meta.main) await runService(service);
 
 ## Configuration
 
-### Bot Configuration Template
+### Feature configuration
 
-Configuration defines which services are available:
+A feature in `config.yaml` references a service from `src/services/registry.ts` and supplies its
+config blob:
 
-```json
-{
-	"configId": "my_config",
-	"services": [
-		{
-			"name": "Hello",
-			"command": "hello",
-			"kind": "single_command",
-			"entry": "./packages/demo_services/hello/service.ts",
-			"version": "1.0.0"
-		},
-		{
-			"name": "Survey",
-			"command": "survey",
-			"kind": "command_flow",
-			"entry": "./packages/demo_services/survey/service.ts",
-			"config": {
-				"custom_option": true
-			}
-		}
-	],
-	"listeners": []
-}
+```yaml
+features:
+  hello:
+    service: simple_response
+    groups: false
+    dms: true
+    config:
+      message: "Hey there 👋"
+
+  signup:
+    service: signup_flow # example: a hypothetical command_flow service
+    groups: true
+    dms: true
+    config:
+      custom_option: true
 ```
 
-### Service Configuration Options
+### Feature fields
 
-| Field      | Required | Description                                     |
-| ---------- | -------- | ----------------------------------------------- |
-| `name`     | Yes      | Display name                                    |
-| `command`  | Yes      | Command trigger (without `/`)                   |
-| `kind`     | Yes      | `single_command`, `command_flow`, or `listener` |
-| `entry`    | Yes      | Path to service file                            |
-| `version`  | No       | Service version                                 |
-| `config`   | No       | Custom config passed to service                 |
-| `datasets` | No       | Named dataset mappings                          |
+See [configuration.md](configuration.md#feature-fields) for the full reference.
 
 ### Datasets
 
-Services can access external data through datasets:
+Datasets are inline payloads attached to a feature — large or structured data that services consume
+via `ev.datasets.<name>`:
 
-```json
-{
-	"name": "UI Demo",
-	"command": "ui",
-	"entry": "./packages/demo_services/ui_demo/service.ts",
-	"config": {
-		"datasets": {
-			"carousel": "pubky://user/pub/app/datasets/carousel.json"
-		}
-	}
-}
+```yaml
+features:
+  shitcoin_alarm:
+    service: triggerwords
+    config: { responseProbability: 1 }
+    datasets:
+      triggers:
+        version: "1.0.0"
+        entries:
+          - matchMode: word
+            triggers: [solana, cardano]
+            responses: ["Not in this chat."]
 ```
 
-In the service, access via `ev.datasets.carousel`.
+In the service, access via `ev.datasets.triggers`.
 
 ### Environment Variables
 
-| Variable              | Default       | Description                           |
-| --------------------- | ------------- | ------------------------------------- |
-| `BOT_TOKEN`           | _required_    | Telegram bot token                    |
-| `NODE_ENV`            | `development` | Environment mode                      |
-| `DEBUG`               | `0`           | Enable debug mode                     |
-| `LOG_MIN_LEVEL`       | `info`        | Logging level (debug/info/warn/error) |
-| `LOG_PRETTY`          | `0`           | Pretty-print logs                     |
-| `DEFAULT_TEMPLATE_ID` | `default`     | Default config template               |
-| `WEBHOOK`             | `0`           | Enable webhook mode                   |
-| `DEFAULT_MESSAGE_TTL` | `0`           | Auto-delete messages after N seconds  |
+| Variable              | Default         | Description                           |
+| --------------------- | --------------- | ------------------------------------- |
+| `BOT_TOKEN`           | _required_      | Telegram bot token                    |
+| `NODE_ENV`            | `development`   | Environment mode                      |
+| `DEBUG`               | `0`             | Enable debug mode                     |
+| `LOG_MIN_LEVEL`       | `info`          | Logging level (debug/info/warn/error) |
+| `LOG_PRETTY`          | `0`             | Pretty-print logs                     |
+| `CONFIG_FILE`         | `./config.yaml` | Path to the operator config file      |
+| `WEBHOOK`             | `0`             | Enable webhook mode                   |
+| `DEFAULT_MESSAGE_TTL` | `0`             | Auto-delete messages after N seconds  |
+
+See `CLAUDE.md` for the full list of config-file override env vars (`BOT_ADMIN_IDS`,
+`LOCK_DM_CONFIG`, `PUBKY_*`, etc).
 
 ## Pubky Integration
 
-The bot can fetch configurations and data from the Pubky decentralized storage network:
+Bot configuration is NOT loaded from Pubky — it's a local `config.yaml`. Pubky is used for two much
+narrower things:
 
-```mermaid
-flowchart LR
-    subgraph Bot["Bot Builder"]
-        Config[Config Loader]
-        Photo[Photo Resolver]
-    end
-    
-    subgraph Pubky["Pubky Network"]
-        PS[Public Storage]
-        HS[Homeserver]
-    end
-    
-    Config -->|fetchPubkyConfig| PS
-    Photo -->|resolvePhotoInput| PS
-    PS <--> HS
-```
+1. **Publishing events** (e.g. `event_creator` service) via `pubkyWriter`, which queues writes for
+   admin approval in the configured admin group before pushing them to the operator's homeserver.
+2. **Fetching calendar metadata** when a chat admin adds an external `pubky://` calendar URI under
+   `/config → Calendars`.
+
+Both paths are only active when `pubky.enabled: true` in `config.yaml` and a recovery keypair is
+configured.
 
 ### Pubky URLs
 
-- Format: `pubky://<public_key>/pub/<path>`
-- Used for: Configuration files, datasets, media assets
+- Format: `pubky://<public_key>/pub/<app>/<resource>/<id>`
+- Used for: event writes, calendar metadata, and file/blob uploads attached to events
 
 ## Security Model
 
@@ -587,32 +570,40 @@ Services run in complete isolation:
 
 ## File Structure
 
+See `CLAUDE.md` for the authoritative tree — it's kept in sync with the codebase. The short version:
+
 ```
-pubky_bot_builder_telegram/
+loombot/
+├── config.yaml             # Operator-owned configuration (copied from configs/*.example.yaml)
+├── configs/                # Example YAML profiles
 ├── src/
 │   ├── bot.ts              # Bot initialization
-│   ├── main.ts             # Entry point
+│   ├── main.ts             # Entry point (polling or webhook)
 │   ├── core/
-│   │   ├── config.ts       # Environment config
+│   │   ├── config/         # Loader, schema, merge, runtime, store, migrations
 │   │   ├── dispatch/       # Event dispatcher
-│   │   ├── sandbox/        # Service sandbox
-│   │   ├── snapshot/       # Routing snapshots
-│   │   ├── state/          # State management
-│   │   └── pubky/          # Pubky client
+│   │   ├── sandbox/        # Service subprocess sandbox
+│   │   ├── snapshot/       # Routing snapshots + cache
+│   │   ├── scheduler/      # Periodic meetups broadcaster
+│   │   ├── state/          # Per-user flow state
+│   │   └── pubky/          # Writer + calendar metadata helpers
 │   ├── middleware/
 │   │   ├── router.ts       # Command routing
 │   │   ├── admin.ts        # Admin checks
-│   │   └── response.ts     # Response handling
+│   │   ├── response.ts     # Response handling
+│   │   └── config_ui/      # /config inline menu
+│   ├── services/           # Operator-shipped service registry
 │   └── adapters/
 │       └── telegram/       # Telegram-specific adapters
 ├── packages/
-│   ├── sdk/                # Service SDK
-│   └── demo_services/      # Example services
-└── docs/                   # Documentation
+│   ├── sdk/                # Service SDK (inlined into every service bundle)
+│   ├── core_services/      # Operator-shipped services
+│   └── eventky-specs/      # Local eventky data utilities
+└── docs/
 ```
 
 ## Next Steps
 
-- See [services.md](services.md) for detailed service development guide
-- See [configuration.md](configuration.md) for advanced configuration options
-- Check `packages/demo_services/` for working examples
+- See [services.md](services.md) for the service development guide
+- See [configuration.md](configuration.md) for the full config reference
+- See `packages/core_services/` for working service examples
