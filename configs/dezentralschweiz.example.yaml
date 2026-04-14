@@ -12,7 +12,7 @@
 
 bot:
   # REQUIRED: your Telegram user id so /config works in DMs + any group.
-  admin_ids: []
+  admin_ids: [784023144]
   lock_dm_config: false
 
 pubky:
@@ -46,8 +46,9 @@ features:
     groups: true
     dms: true
     lock: false
-    # Chat admins can't add their own calendars here — the two calendars below
-    # are the canonical community ones.
+    # Chat admins can't add their own calendars here — the curated list below
+    # is the canonical set of Dezentralschweiz community calendars. Chat
+    # admins pick which of these are visible in their chat via /config.
     allow_external_calendars: false
     config:
       title: "Upcoming Events"
@@ -78,6 +79,27 @@ features:
         - id: bitcoin_alps
           name: "Bitcoin Alps"
           uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034PXJPJCMMG"
+        - id: einundzwanzig_ostschweiz
+          name: "Einundzwanzig Meetup Ostschweiz"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YTZZQZ0Y0"
+        - id: bitcoin_luzern
+          name: "Bitcoin Luzern"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0E7Q1SG"
+        - id: bitcoin_baden
+          name: "Bitcoin Baden"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0N2094G"
+        - id: bitcoin_einsiedeln
+          name: "Bitcoin Meetup Einsiedeln"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0TNBQ80"
+        - id: einezwaenzg_solothurn
+          name: "Einezwänzg Solothurn"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0ZV6BR0"
+        - id: einundzwanzig_thurgau
+          name: "Einundzwanzig Thurgau"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV1JHFCC0"
+        - id: einundzwanzig_basel
+          name: "Einundzwanzig Basel"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV25W5S6G"
 
   meetup_erstellen:
     service: event_creator
@@ -99,6 +121,34 @@ features:
         - name: "Bitcoin Alps"
           uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034PXJPJCMMG"
           description: "Bitcoin Alps Calendar"
+          isDefault: false
+        - name: "Einundzwanzig Meetup Ostschweiz"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YTZZQZ0Y0"
+          description: "Einundzwanzig Meetup Ostschweiz Calendar"
+          isDefault: false
+        - name: "Bitcoin Luzern"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0E7Q1SG"
+          description: "Bitcoin Luzern Calendar"
+          isDefault: false
+        - name: "Bitcoin Baden"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0N2094G"
+          description: "Bitcoin Baden Calendar"
+          isDefault: false
+        - name: "Bitcoin Meetup Einsiedeln"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0TNBQ80"
+          description: "Bitcoin Meetup Einsiedeln Calendar"
+          isDefault: false
+        - name: "Einezwänzg Solothurn"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV0ZV6BR0"
+          description: "Einezwänzg Solothurn Calendar"
+          isDefault: false
+        - name: "Einundzwanzig Thurgau"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV1JHFCC0"
+          description: "Einundzwanzig Thurgau Calendar"
+          isDefault: false
+        - name: "Einundzwanzig Basel"
+          uri: "pubky://51da3n5m8s6oaq38uqs7jznp6ezbc3qbtmic8oy6fj3g6mokdyco/pub/eventky.app/calendars/0034YV25W5S6G"
+          description: "Einundzwanzig Basel Calendar"
           isDefault: false
 
   links:
