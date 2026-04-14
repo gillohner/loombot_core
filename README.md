@@ -526,10 +526,3 @@ deno fmt              # tabs, 100-char line width
 ```
 
 Project layout and architecture notes live in `CLAUDE.md`.
-
----
-
-## License
-
-See `LICENSE` (TBD — loombot is a fork of
-[loombot_core](https://github.com/gillohner/loombot_core)).
