@@ -3,6 +3,7 @@
 
 import { log } from "@core/util/logger.ts";
 import { blake3 } from "@noble/hashes/blake3";
+import { t } from "@core/i18n/mod.ts";
 import {
 	getExpiredPendingWrites,
 	getPendingWrite,
@@ -412,11 +413,11 @@ class PubkyWriter {
 	): Promise<{ success: boolean; message: string }> {
 		const pending = getPendingWrite(writeId);
 		if (!pending) {
-			return { success: false, message: "Write request not found" };
+			return { success: false, message: t("pubky.write_not_found") };
 		}
 
 		if (pending.status !== "pending") {
-			return { success: false, message: `Already ${pending.status}` };
+			return { success: false, message: t("pubky.already_status", { status: pending.status }) };
 		}
 
 		updatePendingWriteStatus(writeId, "approved", {
@@ -427,7 +428,7 @@ class PubkyWriter {
 		const writeSuccess = await this.executeWrite(writeId);
 		return {
 			success: writeSuccess,
-			message: writeSuccess ? "Approved & written!" : "Approved but write failed",
+			message: writeSuccess ? t("pubky.approve_result_ok") : t("pubky.approve_result_failed"),
 		};
 	}
 
@@ -440,11 +441,11 @@ class PubkyWriter {
 	): Promise<{ success: boolean; message: string }> {
 		const pending = getPendingWrite(writeId);
 		if (!pending) {
-			return { success: false, message: "Write request not found" };
+			return { success: false, message: t("pubky.write_not_found") };
 		}
 
 		if (pending.status !== "pending") {
-			return { success: false, message: `Already ${pending.status}` };
+			return { success: false, message: t("pubky.already_status", { status: pending.status }) };
 		}
 
 		updatePendingWriteStatus(writeId, "rejected", {
@@ -466,7 +467,7 @@ class PubkyWriter {
 			}
 		}
 
-		return { success: true, message: "Rejected" };
+		return { success: true, message: t("pubky.reject_result") };
 	}
 
 	/**
@@ -484,7 +485,7 @@ class PubkyWriter {
 					await this.botApi.editMessageText(
 						this.config.adminGroup,
 						write.adminMessageId,
-						write.preview + "\n\n⏰ **Expired**",
+						write.preview + "\n\n" + t("pubky.expired_notice"),
 						{ parse_mode: "Markdown" },
 					);
 				} catch {
@@ -526,16 +527,14 @@ class PubkyWriter {
 		} else {
 			userDisplay = `[User ${pending.userId}](tg://user?id=${pending.userId})`;
 		}
-		const message = `📝 *New Pubky Write Request*
-
-*From:* ${userDisplay} (${pending.userId})
-*Service:* ${pending.serviceId}
-*Path:* \`${pending.path}\`
-
-*Preview:*
-${pending.preview}
-
-*Expires:* ${expiresDate}`.trim();
+		const message = t("pubky.admin_message", {
+			userDisplay,
+			userId: pending.userId,
+			serviceId: pending.serviceId,
+			path: pending.path,
+			preview: pending.preview,
+			expiresAt: expiresDate,
+		});
 
 		try {
 			const result = await this.botApi.sendMessage(this.config.adminGroup, message, {
@@ -543,8 +542,14 @@ ${pending.preview}
 				reply_markup: {
 					inline_keyboard: [
 						[
-							{ text: "✅ Approve", callback_data: `pubky:approve:${pending.id}` },
-							{ text: "❌ Reject", callback_data: `pubky:reject:${pending.id}` },
+							{
+								text: t("pubky.button_approve"),
+								callback_data: `pubky:approve:${pending.id}`,
+							},
+							{
+								text: t("pubky.button_reject"),
+								callback_data: `pubky:reject:${pending.id}`,
+							},
 						],
 					],
 				},

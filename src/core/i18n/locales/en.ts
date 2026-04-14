@@ -1,0 +1,216 @@
+// src/i18n/locales/en.ts
+// English strings for the core bot (router + /config UI + pubky writer).
+// English is the fallback language: every key that lives in any locale file
+// MUST exist here. The locales key-parity test enforces this.
+//
+// HTML IS INTENTIONAL in many values ("<b>...</b>", "<code>...</code>", "<pre>...</pre>").
+// Translators MUST preserve tags verbatim.
+//
+// Parameter interpolation uses {{name}} syntax. Values passed as parameters
+// are NOT auto-escaped — callers must pre-escape any user-provided text with
+// escapeHtml() before passing it in.
+
+const en = {
+	core: {
+		start_welcome: "Hi! I'm configured per-chat. Admins can run /config to pick features.",
+		admin_only: "Admin only.",
+	},
+	config_ui: {
+		toast: {
+			admin_only: "Admin only",
+			unknown_action: "Unknown action",
+			error: "Error",
+			cancelled: "Cancelled.",
+		},
+		common: {
+			back: "← Back",
+			close: "✖ Close",
+			closed_placeholder: "(closed)",
+		},
+		menu: {
+			title: "⚙️ <b>Configure loombot for this chat</b>\n\nPick a section below.",
+			button_features: "🧩 Features",
+			button_calendars: "📅 Calendars",
+			button_periodic: "📣 Periodic broadcast",
+			button_welcome: "👋 Welcome message",
+		},
+		features: {
+			title: "🧩 <b>Features</b>\n\nTap to toggle. Locked features don't appear here.",
+			empty: "(no toggleable features)",
+			locked_by_operator: "Feature is locked by operator",
+			toggle_enabled: "Enabled {{featureId}}",
+			toggle_disabled: "Disabled {{featureId}}",
+		},
+		calendars: {
+			title:
+				"📅 <b>Calendars</b>\n\nPick which calendars show in this chat for <code>{{featureId}}</code>.",
+			add_external: "➕ Add external calendar",
+			external_prefix: "external:",
+			removed_toast: "Removed",
+			added_toast: "✅ Added {{label}}. Tap /config to review.",
+			not_allowed_toast: "Not allowed",
+			prompt_html: [
+				"📅 <b>Send me a <code>pubky://</code> calendar URI to add.</b>",
+				"",
+				"Format: <code>pubky://&lt;52-char-pk&gt;/pub/eventky.app/calendars/&lt;calendarId&gt;</code>",
+				"",
+				"Send /cancel to go back without adding anything.",
+			].join("\n"),
+			invalid_uri_html: [
+				"That doesn't look like a valid calendar URI.",
+				"",
+				"Expected: <code>pubky://&lt;52-char-pk&gt;/pub/eventky.app/calendars/&lt;calendarId&gt;</code>",
+				"",
+				"Send /cancel to go back, or try again.",
+			].join("\n"),
+			fetch_failed: [
+				"Couldn't reach that calendar — the URI may be wrong or the homeserver may be down.",
+				"",
+				"Send /cancel to go back, or try again.",
+			].join("\n"),
+			already_added: "That calendar is already in the list. Tap /config to review.",
+			label_unnamed: "the calendar",
+			label_named: '"{{name}}"',
+		},
+		welcome: {
+			title: "👋 <b>Welcome message</b>",
+			status_custom: "Custom (chat override)",
+			status_default: "Using operator default",
+			status_line: "<b>Status:</b> {{state}}",
+			body_custom: "(Default: <pre>{{defaultMessage}}</pre>)",
+			body_default: "Tap <i>Edit</i> to override the default in this chat.",
+			edit_button: "✏️ Edit",
+			reset_button: "♻️ Reset to default",
+			reset_toast: "Reset to default",
+			prompt_html: [
+				"👋 <b>Send me the new welcome message.</b>",
+				"",
+				"Available placeholders:",
+				"• <code>{display_name}</code>",
+				"• <code>{username}</code>",
+				"• <code>{first_name}</code>",
+				"• <code>{last_name}</code>",
+				"• <code>{user_id}</code>",
+				"",
+				"Send /cancel to keep the current message.",
+			].join("\n"),
+			empty: [
+				"Welcome message can't be empty.",
+				"",
+				"Send /cancel to keep the current message, or try again.",
+			].join("\n"),
+			too_long: [
+				"Too long — max {{max}} characters, yours was {{length}}.",
+				"",
+				"Send /cancel to keep the current message, or try again with a shorter version.",
+			].join("\n"),
+			updated: "✅ Welcome message updated. Tap /config to review.",
+		},
+		periodic: {
+			title: "📣 <b>Periodic broadcast</b> — <code>{{featureId}}</code>",
+			status_enabled: "✅ Enabled",
+			status_disabled: "❌ Disabled",
+			status_line: "<b>Status:</b> {{status}} <i>({{tag}})</i>",
+			day_line: "<b>Day:</b> {{day}} <i>({{tag}})</i>",
+			hour_line: "<b>Hour:</b> {{hour}} <i>({{tag}})</i>",
+			timezone_line: "<b>Timezone:</b> <code>{{timezone}}</code> <i>({{tag}})</i>",
+			range_line: "<b>Range:</b> {{range}} <i>({{tag}})</i>",
+			pin_line: "<b>Pin message:</b> {{pin}} <i>({{tag}})</i>",
+			unpin_line: "<b>Unpin previous:</b> {{unpin}} <i>({{tag}})</i>",
+			footer_calendars: "Calendars for the broadcast are managed under <b>📅 Calendars</b>.",
+			footer_preview:
+				"Tap <b>🚀 Send preview now</b> to fire a one-off broadcast with the current settings.",
+			tag_override: "override",
+			tag_default: "default",
+			button_enabled: "✅ Enabled — tap to disable",
+			button_disabled: "❌ Disabled — tap to enable",
+			button_timezone: "🌍 {{timezone}} — change",
+			button_pin: "Pin {{value}}",
+			button_unpin_previous: "Unpin previous {{value}}",
+			button_preview: "🚀 Send preview now",
+			button_calendars: "📅 Calendars",
+			button_reset: "🔄 Reset to defaults",
+			toast_reset: "Reset to operator defaults",
+			toast_invalid_day: "Invalid day",
+			toast_invalid_hour: "Invalid hour",
+			toast_invalid_range: "Invalid range",
+			toast_preview_sent: "Preview sent",
+			toast_preview_failed: "Preview failed: {{error}}",
+			tz_prompt_html: [
+				"🌍 <b>Send me an IANA timezone.</b>",
+				"",
+				"Examples: <code>Europe/Zurich</code>, <code>America/New_York</code>, <code>Pacific/Auckland</code>.",
+				"",
+				"Send /cancel to keep the current timezone.",
+			].join("\n"),
+			tz_empty: [
+				"Timezone can't be empty.",
+				"",
+				"Send one like <code>Europe/Zurich</code>, or /cancel to keep the current timezone.",
+			].join("\n"),
+			tz_invalid: [
+				"<code>{{input}}</code> isn't a valid IANA timezone.",
+				"",
+				"Examples: <code>Europe/Zurich</code>, <code>America/New_York</code>, <code>Pacific/Auckland</code>.",
+				"",
+				"Send /cancel to keep the current timezone, or try again.",
+			].join("\n"),
+			tz_set: "✅ Timezone set to <code>{{timezone}}</code>.",
+			day_short: {
+				"0": "Sun",
+				"1": "Mon",
+				"2": "Tue",
+				"3": "Wed",
+				"4": "Thu",
+				"5": "Fri",
+				"6": "Sat",
+			},
+			day_long: {
+				"0": "Sunday",
+				"1": "Monday",
+				"2": "Tuesday",
+				"3": "Wednesday",
+				"4": "Thursday",
+				"5": "Friday",
+				"6": "Saturday",
+			},
+			range: {
+				today: "Today",
+				week: "This week",
+				"2weeks": "Next 2 weeks",
+				"30days": "Next 30 days",
+			},
+		},
+	},
+	pubky: {
+		button_approve: "✅ Approve",
+		button_reject: "❌ Reject",
+		invalid_callback: "Invalid callback",
+		not_authorized: "Not authorized",
+		approved_by: "✅ **Approved** by {{name}}",
+		rejected_by: "❌ **Rejected** by {{name}}",
+		write_ok: " - Written successfully",
+		write_failed: " - ⚠️ Write failed",
+		expired_notice: "⏰ **Expired**",
+		admin_message: [
+			"📝 *New Pubky Write Request*",
+			"",
+			"*From:* {{userDisplay}} ({{userId}})",
+			"*Service:* {{serviceId}}",
+			"*Path:* `{{path}}`",
+			"",
+			"*Preview:*",
+			"{{preview}}",
+			"",
+			"*Expires:* {{expiresAt}}",
+		].join("\n"),
+		approve_result_ok: "Approved & written!",
+		approve_result_failed: "Approved but write failed",
+		reject_result: "Rejected",
+		already_status: "Already {{status}}",
+		write_not_found: "Write request not found",
+	},
+} as const;
+
+export default en;
+export type LocaleMessages = typeof en;

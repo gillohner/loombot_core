@@ -3,6 +3,7 @@
 
 import type { EventCreatorConfig, EventCreatorState } from "../types.ts";
 import { validateEndTime } from "./validation.ts";
+import { tfor } from "./i18n.ts";
 
 /**
  * Check if all required fields are complete
@@ -17,21 +18,23 @@ export function isRequiredPhaseComplete(state: EventCreatorState): boolean {
 export function canSubmit(
 	state: EventCreatorState,
 	config: EventCreatorConfig,
+	locale?: string,
 ): { canSubmit: boolean; error?: string } {
+	const t = tfor(locale);
 	// Required fields
 	if (!isRequiredPhaseComplete(state)) {
-		return { canSubmit: false, error: "Missing required fields" };
+		return { canSubmit: false, error: t("submit.missing_required") };
 	}
 
 	// Config-required fields
 	if (config.requireLocation && !state.location?.name) {
-		return { canSubmit: false, error: "Location is required" };
+		return { canSubmit: false, error: t("submit.location_required") };
 	}
 	if (config.requireImage && !state.imageFileId) {
-		return { canSubmit: false, error: "Image is required" };
+		return { canSubmit: false, error: t("submit.image_required") };
 	}
 	if (config.requireEndTime && (!state.endDate || !state.endTime)) {
-		return { canSubmit: false, error: "End time is required" };
+		return { canSubmit: false, error: t("submit.end_required") };
 	}
 
 	// Validate end time if provided
@@ -41,6 +44,7 @@ export function canSubmit(
 			state.startTime!,
 			state.endDate,
 			state.endTime,
+			locale,
 		);
 		if (!endTimeValid.valid) {
 			return { canSubmit: false, error: endTimeValid.error };
@@ -51,37 +55,30 @@ export function canSubmit(
 }
 
 /**
- * Get a display-friendly field name
- */
-export function getFieldDisplayName(field: string): string {
-	const names: Record<string, string> = {
-		title: "Title",
-		startDate: "Start Date",
-		startTime: "Start Time",
-		description: "Description",
-		endDate: "End Date",
-		endTime: "End Time",
-		location: "Location",
-		imageFileId: "Image",
-	};
-	return names[field] || field;
-}
-
-/**
  * Get the prompt text for editing a specific field
  */
-export function getEditPrompt(field: string): string {
-	const prompts: Record<string, string> = {
-		title: "Enter new title (1-100 characters):",
-		startDate: "Enter new date (DD.MM.YYYY):",
-		startTime: "Enter new time (HH:MM in 24h format):",
-		description: 'Enter new description (or type "clear" to remove):',
-		endDate: 'Enter end date (DD.MM.YYYY) or type "clear" to remove:',
-		endTime: 'Enter end time (HH:MM) or type "clear" to remove:',
-		location: 'Enter location name or type "clear" to remove:',
-		imageFileId: 'Send a new photo or type "clear" to remove:',
-	};
-	return prompts[field] || "Enter new value:";
+export function getEditPrompt(field: string, locale?: string): string {
+	const t = tfor(locale);
+	switch (field) {
+		case "title":
+			return t("edit.prompt_title");
+		case "startDate":
+			return t("edit.prompt_start_date");
+		case "startTime":
+			return t("edit.prompt_start_time");
+		case "description":
+			return t("edit.prompt_description");
+		case "endDate":
+			return t("edit.prompt_end_date");
+		case "endTime":
+			return t("edit.prompt_end_time");
+		case "location":
+			return t("edit.prompt_location");
+		case "imageFileId":
+			return t("edit.prompt_image");
+		default:
+			return t("edit.prompt_generic");
+	}
 }
 
 /**

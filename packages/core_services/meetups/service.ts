@@ -1,6 +1,15 @@
 // packages/core_services/meetups/service.ts
 // Meetups - Command flow service that displays upcoming events from Pubky calendars
-import { defineService, del, none, runService, state, UIBuilder, uiKeyboard } from "@sdk/mod.ts";
+import {
+	createI18n,
+	defineService,
+	del,
+	none,
+	runService,
+	state,
+	UIBuilder,
+	uiKeyboard,
+} from "@sdk/mod.ts";
 import type { CallbackEvent, CommandEvent, MessageEvent } from "@sdk/mod.ts";
 import {
 	buildCalendarHeader,
@@ -11,6 +20,7 @@ import {
 	type EventOccurrence,
 	extractLocationName,
 	formatEventsMessage,
+	labelForRange,
 	MEETUPS_COMMAND,
 	MEETUPS_CONFIG_SCHEMA,
 	MEETUPS_DATASET_SCHEMAS,
@@ -24,9 +34,14 @@ import {
 	type NexusEventView,
 	parseCalendarUri,
 	parseEventUri,
-	TIMELINE_LABELS,
 	type TimelineRangeId,
 } from "./constants.ts";
+import enMessages from "./locales/en.ts";
+import deMessages from "./locales/de.ts";
+
+const tRaw = createI18n({ en: enMessages, de: deMessages }, "en");
+const tl = (locale: string | undefined, key: string, params?: Record<string, unknown>) =>
+	tRaw(key, params, locale ?? "en");
 
 // ============================================================================
 // RRULE Parsing & Recurrence Expansion (pure TypeScript, no npm dependency)
@@ -538,6 +553,7 @@ export async function fetchEvents(
 function buildCalendarKeyboard(
 	calendars: MeetupsConfig["calendars"],
 	serviceId: string,
+	locale: string | undefined,
 ) {
 	const keyboard = UIBuilder.keyboard().namespace(serviceId);
 	for (const [idx, cal] of calendars.entries()) {
@@ -545,10 +561,10 @@ function buildCalendarKeyboard(
 		keyboard.row();
 	}
 	if (calendars.length > 1) {
-		keyboard.callback("All Calendars", "cal:all");
+		keyboard.callback(tl(locale, "all_calendars"), "cal:all");
 		keyboard.row();
 	}
-	keyboard.callback("\u2716 Close", "close");
+	keyboard.callback(tl(locale, "close_button"), "close");
 	return keyboard.build();
 }
 
@@ -556,31 +572,33 @@ function buildTimelineKeyboard(
 	options: TimelineRangeId[],
 	showBack: boolean,
 	serviceId: string,
+	locale: string | undefined,
 ) {
 	const keyboard = UIBuilder.keyboard().namespace(serviceId);
 	for (const opt of options) {
-		keyboard.callback(TIMELINE_LABELS[opt], `time:${opt}`);
+		keyboard.callback(tl(locale, `timeline.${opt}`), `time:${opt}`);
 		keyboard.row();
 	}
 	if (showBack) {
-		keyboard.callback("\u2190 Back", "back:cal");
+		keyboard.callback(tl(locale, "back_button"), "back:cal");
 	}
-	keyboard.callback("\u2716 Close", "close");
+	keyboard.callback(tl(locale, "close_button"), "close");
 	return keyboard.build();
 }
 
 function buildEventListKeyboard(
 	hasMultipleCalendars: boolean,
 	serviceId: string,
+	locale: string | undefined,
 ) {
 	const keyboard = UIBuilder.keyboard().namespace(serviceId);
-	keyboard.callback("\u2190 Change timeframe", "back:time");
+	keyboard.callback(tl(locale, "change_timeframe"), "back:time");
 	keyboard.row();
 	if (hasMultipleCalendars) {
-		keyboard.callback("\u2190 Change calendar", "back:cal");
+		keyboard.callback(tl(locale, "change_calendar"), "back:cal");
 		keyboard.row();
 	}
-	keyboard.callback("\u2716 Close", "close");
+	keyboard.callback(tl(locale, "close_button"), "close");
 	return keyboard.build();
 }
 
@@ -601,12 +619,13 @@ const service = defineService({
 		command: (ev: CommandEvent) => {
 			const rawConfig = ev.serviceConfig || {};
 			const config: MeetupsConfig = { ...DEFAULT_CONFIG, ...rawConfig } as MeetupsConfig;
+			const locale = ev.language;
 
 			if (!config.calendars?.length) {
 				return uiKeyboard(
 					UIBuilder.keyboard().namespace(MEETUPS_SERVICE_ID)
-						.callback("\u2716 Close", "close").build(),
-					"Meetups service is not configured. Please set at least one calendar URI.",
+						.callback(tl(locale, "close_button"), "close").build(),
+					tl(locale, "not_configured"),
 					{
 						state: state.replace({}),
 						options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
@@ -618,8 +637,8 @@ const service = defineService({
 
 			if (hasMultiple) {
 				// Show calendar picker
-				const kb = buildCalendarKeyboard(config.calendars, MEETUPS_SERVICE_ID);
-				return uiKeyboard(kb, "Select a calendar:", {
+				const kb = buildCalendarKeyboard(config.calendars, MEETUPS_SERVICE_ID, locale);
+				return uiKeyboard(kb, tl(locale, "select_calendar"), {
 					state: state.replace({}),
 					options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
 				});
@@ -627,8 +646,8 @@ const service = defineService({
 
 			// Single calendar — skip to timeline picker
 			const timeOpts = config.timelineOptions ?? DEFAULT_TIMELINE_OPTIONS;
-			const kb = buildTimelineKeyboard(timeOpts, false, MEETUPS_SERVICE_ID);
-			return uiKeyboard(kb, "Select a time range:", {
+			const kb = buildTimelineKeyboard(timeOpts, false, MEETUPS_SERVICE_ID, locale);
+			return uiKeyboard(kb, tl(locale, "select_time_range"), {
 				state: state.replace({ selectedCalendar: 0 }),
 				options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
 			});
@@ -641,6 +660,7 @@ const service = defineService({
 			const currentState = (ev.state || {}) as MeetupsState;
 			const hasMultiple = (config.calendars?.length ?? 0) > 1;
 			const timeOpts = config.timelineOptions ?? DEFAULT_TIMELINE_OPTIONS;
+			const locale = ev.language;
 
 			// Close — delete message
 			if (data === "close") {
@@ -649,8 +669,8 @@ const service = defineService({
 
 			// Back to calendar picker
 			if (data === "back:cal") {
-				const kb = buildCalendarKeyboard(config.calendars, MEETUPS_SERVICE_ID);
-				return uiKeyboard(kb, "Select a calendar:", {
+				const kb = buildCalendarKeyboard(config.calendars, MEETUPS_SERVICE_ID, locale);
+				return uiKeyboard(kb, tl(locale, "select_calendar"), {
 					state: state.replace({}),
 					options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
 				});
@@ -658,8 +678,8 @@ const service = defineService({
 
 			// Back to timeline picker (preserves selectedCalendar)
 			if (data === "back:time") {
-				const kb = buildTimelineKeyboard(timeOpts, hasMultiple, MEETUPS_SERVICE_ID);
-				return uiKeyboard(kb, "Select a time range:", {
+				const kb = buildTimelineKeyboard(timeOpts, hasMultiple, MEETUPS_SERVICE_ID, locale);
+				return uiKeyboard(kb, tl(locale, "select_time_range"), {
 					state: state.replace({ selectedCalendar: currentState.selectedCalendar }),
 					options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
 				});
@@ -670,8 +690,8 @@ const service = defineService({
 			if (calMatch) {
 				const val = calMatch[1];
 				const selectedCalendar: number | "all" = val === "all" ? "all" : Number(val);
-				const kb = buildTimelineKeyboard(timeOpts, hasMultiple, MEETUPS_SERVICE_ID);
-				return uiKeyboard(kb, "Select a time range:", {
+				const kb = buildTimelineKeyboard(timeOpts, hasMultiple, MEETUPS_SERVICE_ID, locale);
+				return uiKeyboard(kb, tl(locale, "select_time_range"), {
 					state: state.replace({ selectedCalendar }),
 					options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
 				});
@@ -691,14 +711,14 @@ const service = defineService({
 
 				try {
 					const occurrences = await fetchEvents(config, calendarIndices, windowEnd);
-					const header = buildCalendarHeader(config, selectedCalendar);
-					const rangeLabel = TIMELINE_LABELS[rangeId] || rangeId;
+					const header = buildCalendarHeader(config, selectedCalendar, locale);
+					const rangeLabel = labelForRange(rangeId, locale) || rangeId;
 					const linkBaseUrl = config.linkEvents !== false
 						? (config.eventkyBaseUrl || "https://eventky.app")
 						: undefined;
-					const eventList = formatEventsMessage(occurrences, rangeLabel, linkBaseUrl);
+					const eventList = formatEventsMessage(occurrences, rangeLabel, linkBaseUrl, locale);
 					const text = header + eventList;
-					const kb = buildEventListKeyboard(hasMultiple, MEETUPS_SERVICE_ID);
+					const kb = buildEventListKeyboard(hasMultiple, MEETUPS_SERVICE_ID, locale);
 
 					return uiKeyboard(kb, text, {
 						state: state.replace({ selectedCalendar, timeRange: rangeId }),
@@ -710,8 +730,8 @@ const service = defineService({
 					});
 				} catch (err) {
 					console.error("Meetups fetch error:", (err as Error).message);
-					const kb = buildEventListKeyboard(hasMultiple, MEETUPS_SERVICE_ID);
-					return uiKeyboard(kb, "Failed to fetch upcoming events. Please try again.", {
+					const kb = buildEventListKeyboard(hasMultiple, MEETUPS_SERVICE_ID, locale);
+					return uiKeyboard(kb, tl(locale, "fetch_failed"), {
 						state: state.replace(currentState),
 						options: { parse_mode: "HTML", replaceGroup: MEETUPS_REPLACE_GROUP },
 					});

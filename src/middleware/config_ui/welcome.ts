@@ -6,6 +6,7 @@ import type { Context } from "grammy";
 import { getOperatorConfig } from "@core/config/runtime.ts";
 import { getChatFeatureOverride, setChatFeatureOverride } from "@core/config/store.ts";
 import { clearPendingInput, setPendingInput } from "@middleware/config_ui/state.ts";
+import { t } from "@core/i18n/mod.ts";
 import type { InlineKeyboard } from "@middleware/config_ui/types.ts";
 
 function currentWelcome(chatId: string, featureId: string): {
@@ -26,12 +27,16 @@ function currentWelcome(chatId: string, featureId: string): {
 
 export function welcomeText(chatId: string, featureId: string): string {
 	const { effective, isOverride, defaultMessage } = currentWelcome(chatId, featureId);
-	const escaped = escapeHtml(effective);
-	const state = isOverride ? "Custom (chat override)" : "Using operator default";
-	return `👋 <b>Welcome message</b>\n\n<b>Status:</b> ${state}\n\n<pre>${escaped}</pre>\n\n` +
-		(isOverride
-			? `(Default: <pre>${escapeHtml(defaultMessage)}</pre>)`
-			: "Tap <i>Edit</i> to override the default in this chat.");
+	const state = isOverride
+		? t("config_ui.welcome.status_custom")
+		: t("config_ui.welcome.status_default");
+	const statusLine = t("config_ui.welcome.status_line", { state });
+	const body = isOverride
+		? t("config_ui.welcome.body_custom", { defaultMessage: escapeHtml(defaultMessage) })
+		: t("config_ui.welcome.body_default");
+	return `${t("config_ui.welcome.title")}\n\n${statusLine}\n\n<pre>${
+		escapeHtml(effective)
+	}</pre>\n\n${body}`;
 }
 
 export function welcomeKeyboard(
@@ -40,12 +45,15 @@ export function welcomeKeyboard(
 ): InlineKeyboard {
 	const { isOverride } = currentWelcome(chatId, featureId);
 	const rows: InlineKeyboard = [
-		[{ text: "✏️ Edit", callback_data: `cfg:welcome_edit:${featureId}` }],
+		[{ text: t("config_ui.welcome.edit_button"), callback_data: `cfg:welcome_edit:${featureId}` }],
 	];
 	if (isOverride) {
-		rows.push([{ text: "♻️ Reset to default", callback_data: `cfg:welcome_reset:${featureId}` }]);
+		rows.push([{
+			text: t("config_ui.welcome.reset_button"),
+			callback_data: `cfg:welcome_reset:${featureId}`,
+		}]);
 	}
-	rows.push([{ text: "← Back", callback_data: "cfg:main" }]);
+	rows.push([{ text: t("config_ui.common.back"), callback_data: "cfg:main" }]);
 	return rows;
 }
 
@@ -78,21 +86,7 @@ export async function promptEditWelcome(
 		menuMessageId,
 	});
 	await ctx.answerCallbackQuery();
-	await ctx.reply(
-		[
-			"👋 <b>Send me the new welcome message.</b>",
-			"",
-			"Available placeholders:",
-			"• <code>{display_name}</code>",
-			"• <code>{username}</code>",
-			"• <code>{first_name}</code>",
-			"• <code>{last_name}</code>",
-			"• <code>{user_id}</code>",
-			"",
-			"Send /cancel to keep the current message.",
-		].join("\n"),
-		{ parse_mode: "HTML" },
-	);
+	await ctx.reply(t("config_ui.welcome.prompt_html"), { parse_mode: "HTML" });
 }
 
 export async function resetWelcome(
@@ -104,7 +98,7 @@ export async function resetWelcome(
 		data: { welcome_override: undefined },
 	});
 	await showWelcome(ctx, chatId, featureId);
-	await ctx.answerCallbackQuery({ text: "Reset to default" });
+	await ctx.answerCallbackQuery({ text: t("config_ui.welcome.reset_toast") });
 }
 
 export async function handleWelcomeInput(
@@ -116,30 +110,18 @@ export async function handleWelcomeInput(
 ): Promise<void> {
 	const trimmed = text.trim();
 	if (trimmed.length === 0) {
-		await ctx.reply(
-			[
-				"Welcome message can't be empty.",
-				"",
-				"Send /cancel to keep the current message, or try again.",
-			].join("\n"),
-		);
+		await ctx.reply(t("config_ui.welcome.empty"));
 		return;
 	}
 	if (trimmed.length > 2000) {
-		await ctx.reply(
-			[
-				`Too long — max 2000 characters, yours was ${trimmed.length}.`,
-				"",
-				"Send /cancel to keep the current message, or try again with a shorter version.",
-			].join("\n"),
-		);
+		await ctx.reply(t("config_ui.welcome.too_long", { max: 2000, length: trimmed.length }));
 		return;
 	}
 	setChatFeatureOverride(chatId, featureId, {
 		data: { welcome_override: trimmed },
 	});
 	clearPendingInput(chatId, userId);
-	await ctx.reply("✅ Welcome message updated. Tap /config to review.");
+	await ctx.reply(t("config_ui.welcome.updated"));
 }
 
 function escapeHtml(text: string): string {

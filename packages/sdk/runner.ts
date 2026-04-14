@@ -25,6 +25,7 @@ interface RawPayload {
 		routeMeta?: { id: string; command: string; description?: string };
 		datasets?: Record<string, unknown>;
 		botPublicKey?: string;
+		locale?: string;
 	};
 }
 
@@ -98,6 +99,7 @@ export async function runService(svc: DefinedService) {
 		routeMeta,
 		datasets: payload.ctx?.datasets,
 		botPublicKey: payload.ctx?.botPublicKey,
+		language: payload.ctx?.locale ?? "en",
 	};
 	let resp;
 	try {

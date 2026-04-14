@@ -64,6 +64,8 @@ export interface SandboxPayload {
 		routeMeta?: { id: string; command: string; description?: string };
 		datasets?: Record<string, unknown>;
 		botPublicKey?: string;
+		/** Operator-level language code (e.g. "en", "de"). Fall back to "en". */
+		locale?: string;
 	};
 	manifest?: SandboxManifest;
 }

@@ -5,12 +5,14 @@
 import { log } from "@core/util/logger.ts";
 import { listKnownChatIds } from "@core/config/store.ts";
 import { buildSnapshot } from "@core/snapshot/snapshot.ts";
+import { getLocale } from "@core/i18n/mod.ts";
 import { fetchEvents } from "../../../packages/core_services/meetups/service.ts";
 import {
 	buildCalendarHeader,
 	computeEndDate,
 	DEFAULT_CONFIG,
 	formatEventsMessage,
+	labelForRange,
 	MEETUPS_SERVICE_ID,
 	type MeetupsConfig,
 	type TimelineRangeId,
@@ -164,19 +166,14 @@ async function runPeriodicBroadcast(
 
 	const occurrences = await fetchEvents(meetupsConfig, allCalendarIndices, windowEnd);
 
-	// 5. Format message
-	const header = buildCalendarHeader(meetupsConfig, "all");
+	// 5. Format message (operator-level locale)
+	const locale = getLocale();
+	const header = buildCalendarHeader(meetupsConfig, "all", locale);
 	const linkBaseUrl = meetupsConfig.linkEvents !== false
 		? (meetupsConfig.eventkyBaseUrl || "https://eventky.app")
 		: undefined;
-	const rangeLabel = rangeId === "today"
-		? "Today"
-		: rangeId === "week"
-		? "This week"
-		: rangeId === "2weeks"
-		? "Next 2 weeks"
-		: "Next 30 days";
-	const eventList = formatEventsMessage(occurrences, rangeLabel, linkBaseUrl);
+	const rangeLabel = labelForRange(rangeId, locale);
+	const eventList = formatEventsMessage(occurrences, rangeLabel, linkBaseUrl, locale);
 	const text = header + eventList;
 
 	// 6. Unpin previous message if configured

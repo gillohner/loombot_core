@@ -13,6 +13,7 @@ import { SERVICE_ID } from "../constants.ts";
 import type { EventCreatorState } from "../types.ts";
 import { escapeHtml } from "../utils/formatting.ts";
 import { getEditPrompt, isFieldClearable } from "../utils/state.ts";
+import { tev, tfor } from "../utils/i18n.ts";
 import {
 	normalizeDate,
 	parseDateParts,
@@ -27,42 +28,50 @@ import { showOptionalMenu } from "./optional_menu.ts";
 
 export function handleEditMenu(ev: CallbackEvent) {
 	const st = (ev.state ?? {}) as EventCreatorState;
+	const t = tfor(ev.language);
 
 	const keyboard = UIBuilder.keyboard()
 		.namespace(SERVICE_ID)
-		.callback(`📌 Title: ${st.title}`, "edit:title")
+		.callback(t("edit.button_title", { value: st.title ?? "" }), "edit:title")
 		.row()
-		.callback(`📅 Date: ${st.startDate}`, "edit:startDate")
+		.callback(t("edit.button_date", { value: st.startDate ?? "" }), "edit:startDate")
 		.row()
-		.callback(`⏰ Time: ${st.startTime}`, "edit:startTime")
+		.callback(t("edit.button_time", { value: st.startTime ?? "" }), "edit:startTime")
 		.row();
 
 	if (st.description) {
-		keyboard.callback(`📝 Description: ${st.description.substring(0, 20)}...`, "edit:description")
-			.row();
+		keyboard.callback(
+			t("edit.button_description", { value: st.description.substring(0, 20) }),
+			"edit:description",
+		).row();
 	}
 	if (st.location?.name) {
-		keyboard.callback(`📍 Location: ${st.location.name.substring(0, 20)}...`, "edit:location")
-			.row();
+		keyboard.callback(
+			t("edit.button_location", { value: st.location.name.substring(0, 20) }),
+			"edit:location",
+		).row();
 	}
 	if (st.endDate && st.endTime) {
-		keyboard.callback(`⏱️ End: ${st.endDate} ${st.endTime}`, "edit:endTime").row();
+		keyboard.callback(
+			t("edit.button_end", { date: st.endDate, time: st.endTime }),
+			"edit:endTime",
+		).row();
 	}
 	if (st.imageFileId) {
-		keyboard.callback("🖼️ Image: Attached", "edit:imageFileId").row();
+		keyboard.callback(t("edit.button_image"), "edit:imageFileId").row();
 	}
 
-	keyboard.callback("← Back to Menu", "edit:back");
+	keyboard.callback(t("menu.back_to_menu"), "edit:back");
 
-	const message = `✏️ <b>Edit Fields</b>\n\nSelect a field to edit:`;
+	const message = t("edit.title") + "\n\n" + t("edit.pick");
 
 	return uiKeyboard(keyboard.build(), message, {
 		state: state.replace(st),
 	});
 }
 
-export function handleEditField(_ev: CallbackEvent, field: string) {
-	const prompt = getEditPrompt(field);
+export function handleEditField(ev: CallbackEvent, field: string) {
+	const prompt = getEditPrompt(field, ev.language);
 
 	return reply(prompt, {
 		state: state.merge({
@@ -107,7 +116,7 @@ export function handleEditFieldInput(ev: MessageEvent) {
 		}
 
 		if (message.document) {
-			return reply("Please send an image file (JPEG, PNG, etc.), not other file types.");
+			return reply(tev(ev, "optional.not_image"));
 		}
 	}
 
@@ -139,35 +148,36 @@ function validateAndUpdateField(
 ) {
 	let validation: { valid: boolean; error?: string } = { valid: true };
 	const updatedState = { ...st };
+	const locale = ev.language;
 
 	switch (field) {
 		case "title":
-			validation = validateTitle(text);
+			validation = validateTitle(text, locale);
 			if (validation.valid) updatedState.title = text;
 			break;
 
 		case "startDate":
-			validation = validateDate(text);
+			validation = validateDate(text, locale);
 			if (validation.valid) updatedState.startDate = normalizeDate(text) ?? text;
 			break;
 
 		case "startTime":
-			validation = validateTime(text);
+			validation = validateTime(text, locale);
 			if (validation.valid) updatedState.startTime = text;
 			break;
 
 		case "description":
-			validation = validateDescription(text);
+			validation = validateDescription(text, locale);
 			if (validation.valid) updatedState.description = text;
 			break;
 
 		case "location":
-			validation = validateLocationName(text);
+			validation = validateLocationName(text, locale);
 			if (validation.valid) updatedState.location = { name: text };
 			break;
 
 		case "endDate":
-			validation = validateDate(text);
+			validation = validateDate(text, locale);
 			if (validation.valid) {
 				const normalizedEnd = normalizeDate(text) ?? text;
 				// Validate end date is not before start date
@@ -180,8 +190,11 @@ function validateAndUpdateField(
 						const endVal = endParts.year * 10000 + endParts.month * 100 + endParts.day;
 						if (endVal < startVal) {
 							return reply(
-								`End date (${normalizedEnd}) is before the start date (${st.startDate}).\n\n` +
-									`Please enter an end date on or after the start date:`,
+								tev(ev, "optional.end_before_start", {
+									end: normalizedEnd,
+									start: st.startDate,
+								}) + "\n\n" +
+									tev(ev, "optional.end_before_start_hint"),
 							);
 						}
 					}
@@ -190,8 +203,9 @@ function validateAndUpdateField(
 				// Prompt for endTime if not set
 				if (!st.endTime) {
 					return reply(
-						`✅ End date: <b>${escapeHtml(normalizedEnd)}</b>\n\n` +
-							`Now enter the end time (HH:MM):`,
+						tev(ev, "optional.end_date_ok", { date: escapeHtml(normalizedEnd) }) +
+							"\n\n" +
+							tev(ev, "optional.end_time_prompt"),
 						{
 							state: state.merge({
 								endDate: normalizedEnd,
@@ -205,7 +219,7 @@ function validateAndUpdateField(
 			break;
 
 		case "endTime":
-			validation = validateTime(text);
+			validation = validateTime(text, locale);
 			if (validation.valid) {
 				// Also validate end is after start
 				const endValidation = validateEndTime(
@@ -213,6 +227,7 @@ function validateAndUpdateField(
 					st.startTime!,
 					st.endDate || st.startDate!,
 					text,
+					locale,
 				);
 				if (!endValidation.valid) {
 					return reply(endValidation.error!);
@@ -222,7 +237,7 @@ function validateAndUpdateField(
 			break;
 
 		default:
-			return reply("Unknown field.", {
+			return reply(tev(ev, "edit.unknown_field"), {
 				state: state.replace({ ...st, phase: "optional_menu", editingField: undefined }),
 			});
 	}

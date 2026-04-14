@@ -4,12 +4,11 @@
 import type { Context } from "grammy";
 import { getOperatorConfig } from "@core/config/runtime.ts";
 import { resolveChatConfig } from "@core/config/merge.ts";
+import { t } from "@core/i18n/mod.ts";
 import type { InlineKeyboard } from "@middleware/config_ui/types.ts";
 
-const TITLE = "⚙️ <b>Configure loombot for this chat</b>\n\nPick a section below.";
-
 export function mainMenuText(): string {
-	return TITLE;
+	return t("config_ui.menu.title");
 }
 
 export function mainMenuKeyboard(chatId: string, chatType?: string): InlineKeyboard {
@@ -18,16 +17,22 @@ export function mainMenuKeyboard(chatId: string, chatType?: string): InlineKeybo
 	const rows: InlineKeyboard = [];
 
 	// Features section (always shown)
-	rows.push([{ text: "🧩 Features", callback_data: "cfg:feats" }]);
+	rows.push([{ text: t("config_ui.menu.button_features"), callback_data: "cfg:feats" }]);
 
 	// Calendars + Periodic broadcast — only if there's at least one meetups feature.
 	const meetups = resolved.features.find((f) => f.service === "meetups");
 	if (meetups) {
 		rows.push([
-			{ text: "📅 Calendars", callback_data: `cfg:cals:${meetups.featureId}` },
+			{
+				text: t("config_ui.menu.button_calendars"),
+				callback_data: `cfg:cals:${meetups.featureId}`,
+			},
 		]);
 		rows.push([
-			{ text: "📣 Periodic broadcast", callback_data: `cfg:per:${meetups.featureId}` },
+			{
+				text: t("config_ui.menu.button_periodic"),
+				callback_data: `cfg:per:${meetups.featureId}`,
+			},
 		]);
 	}
 
@@ -35,11 +40,14 @@ export function mainMenuKeyboard(chatId: string, chatType?: string): InlineKeybo
 	const newMember = resolved.features.find((f) => f.service === "new_member");
 	if (newMember) {
 		rows.push([
-			{ text: "👋 Welcome message", callback_data: `cfg:welcome:${newMember.featureId}` },
+			{
+				text: t("config_ui.menu.button_welcome"),
+				callback_data: `cfg:welcome:${newMember.featureId}`,
+			},
 		]);
 	}
 
-	rows.push([{ text: "✖ Close", callback_data: "cfg:close" }]);
+	rows.push([{ text: t("config_ui.common.close"), callback_data: "cfg:close" }]);
 	return rows;
 }
 

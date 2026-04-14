@@ -7,6 +7,7 @@
 // Supported env overrides (all optional):
 //   BOT_ADMIN_IDS                 comma-separated Telegram user ids
 //   LOCK_DM_CONFIG                "1" / "true" → lock DMs to super-admins
+//   BOT_LANGUAGE                  "en" | "de" — sets bot.language
 //   PUBKY_ENABLED                 "1" / "true" → enable Pubky writer
 //   PUBKY_RECOVERY_FILE           path to .pkarr recovery file
 //   PUBKY_APPROVAL_GROUP_CHAT_ID  telegram chat id for write approvals
@@ -81,6 +82,12 @@ export function applyEnvOverrides(raw: unknown): void {
 	if (lockDm !== undefined) {
 		const bot = (cfg.bot = (cfg.bot as Record<string, unknown>) ?? {});
 		bot.lock_dm_config = parseBool(lockDm);
+	}
+
+	const language = Deno.env.get("BOT_LANGUAGE");
+	if (language !== undefined && language.length > 0) {
+		const bot = (cfg.bot = (cfg.bot as Record<string, unknown>) ?? {});
+		bot.language = language.trim().toLowerCase();
 	}
 
 	const pubkyEnabled = Deno.env.get("PUBKY_ENABLED");

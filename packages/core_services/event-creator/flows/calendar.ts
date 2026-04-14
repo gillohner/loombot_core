@@ -12,14 +12,16 @@ import {
 	getSelectableCalendars,
 } from "../utils/calendar.ts";
 import { escapeHtml } from "../utils/formatting.ts";
+import { tev, tfor } from "../utils/i18n.ts";
 
 export function handleCalendarMenu(ev: CallbackEvent) {
 	const st = (ev.state ?? {}) as EventCreatorState;
 	const config = (ev.serviceConfig ?? {}) as EventCreatorConfig;
+	const t = tfor(ev.language);
 
 	const selectableCalendars = getSelectableCalendars(config);
 	if (selectableCalendars.length === 0) {
-		return reply("No additional calendars available.", {
+		return reply(tev(ev, "calendar.none_available"), {
 			state: state.replace(st),
 		});
 	}
@@ -38,25 +40,25 @@ export function handleCalendarMenu(ev: CallbackEvent) {
 		).row();
 	}
 
-	keyboard.callback("← Back to Menu", "calendar:back");
+	keyboard.callback(t("menu.back_to_menu"), "calendar:back");
 
 	// Build description lines for calendars that have one
 	const descLines: string[] = [];
 	const defaultUri = getDefaultCalendarUri(config);
 	if (defaultUri) {
 		const defaultName = getCalendarName(defaultUri, config);
-		descLines.push(`📌 Default: <b>${escapeHtml(defaultName)}</b> <i>(always included)</i>`);
+		descLines.push(t("calendar.default_line", { name: escapeHtml(defaultName) }));
 	}
 	for (const cal of selectableCalendars) {
 		if (cal.description) {
 			const name = getCalendarName(cal.uri, config);
-			descLines.push(`  • ${name}: ${cal.description}`);
+			descLines.push(t("calendar.desc_bullet", { name, desc: cal.description }));
 		}
 	}
 
-	const message = `📅 <b>Select Additional Calendars</b>\n\n` +
+	const message = `${t("calendar.header")}\n\n` +
 		(descLines.length > 0 ? descLines.join("\n") + "\n\n" : "") +
-		`Tap to toggle. Selected: ${selected.length}`;
+		t("calendar.tap_to_toggle", { count: selected.length });
 
 	return uiKeyboard(keyboard.build(), message, {
 		state: state.replace(st),
@@ -73,7 +75,7 @@ export function handleCalendarToggle(ev: CallbackEvent, calIdEncoded: string) {
 	const calUri = decodeCalendarId(calId, config);
 
 	if (!calUri) {
-		return reply("Calendar not found.", {
+		return reply(tev(ev, "calendar.not_found"), {
 			state: state.replace(st),
 		});
 	}

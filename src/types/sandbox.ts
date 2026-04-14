@@ -20,7 +20,12 @@ export interface SandboxExecuteEvent {
 }
 export interface ExecutePayload {
 	event: SandboxExecuteEvent;
-	ctx: { chatId: string; userId: string; serviceConfig?: Record<string, unknown> };
+	ctx: {
+		chatId: string;
+		userId: string;
+		serviceConfig?: Record<string, unknown>;
+		locale?: string;
+	};
 	manifest?: { schemaVersion: number };
 }
 

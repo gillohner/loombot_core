@@ -8,6 +8,7 @@ import { getOperatorConfig } from "@core/config/runtime.ts";
 import { getChatFeatureOverride, setChatFeatureOverride } from "@core/config/store.ts";
 import { clearPendingInput, setPendingInput } from "@middleware/config_ui/state.ts";
 import { runPeriodicNow } from "@core/scheduler/scheduler.ts";
+import { t } from "@core/i18n/mod.ts";
 import type { InlineKeyboard } from "@middleware/config_ui/types.ts";
 
 const DEFAULT_ENABLED = false;
@@ -18,23 +19,7 @@ const DEFAULT_RANGE = "week";
 const DEFAULT_PIN = true;
 const DEFAULT_UNPIN_PREVIOUS = true;
 
-const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DAY_LONG = [
-	"Sunday",
-	"Monday",
-	"Tuesday",
-	"Wednesday",
-	"Thursday",
-	"Friday",
-	"Saturday",
-];
-
-const RANGES: Array<{ id: string; label: string }> = [
-	{ id: "today", label: "Today" },
-	{ id: "week", label: "This week" },
-	{ id: "2weeks", label: "Next 2 weeks" },
-	{ id: "30days", label: "Next 30 days" },
-];
+const RANGE_IDS = ["today", "week", "2weeks", "30days"] as const;
 
 interface PeriodicOverride {
 	enabled?: boolean;
@@ -137,7 +122,7 @@ function setPeriodicFields(
 }
 
 function tag(isOverride: boolean): string {
-	return isOverride ? "override" : "default";
+	return isOverride ? t("config_ui.periodic.tag_override") : t("config_ui.periodic.tag_default");
 }
 
 function escapeHtml(text: string): string {
@@ -148,7 +133,15 @@ function escapeHtml(text: string): string {
 }
 
 function rangeLabel(id: string): string {
-	return RANGES.find((r) => r.id === id)?.label ?? id;
+	return t(`config_ui.periodic.range.${id}`);
+}
+
+function dayLong(d: number): string {
+	return t(`config_ui.periodic.day_long.${d}`);
+}
+
+function dayShort(d: number): string {
+	return t(`config_ui.periodic.day_short.${d}`);
 }
 
 function pad2(n: number): string {
@@ -158,8 +151,9 @@ function pad2(n: number): string {
 export function periodicText(chatId: string, featureId: string): string {
 	const eff = getEffective(chatId, featureId);
 	const o = eff.isOverridden;
-	const status = eff.enabled ? "✅ Enabled" : "❌ Disabled";
-	const dayName = DAY_LONG[eff.day] ?? `day ${eff.day}`;
+	const status = eff.enabled
+		? t("config_ui.periodic.status_enabled")
+		: t("config_ui.periodic.status_disabled");
 	const hourStr = `${pad2(eff.hour)}:00`;
 	const tz = escapeHtml(eff.timezone);
 	const range = rangeLabel(eff.range);
@@ -167,18 +161,18 @@ export function periodicText(chatId: string, featureId: string): string {
 	const unpinStr = eff.unpinPrevious ? "✅" : "❌";
 
 	return [
-		`📣 <b>Periodic broadcast</b> — <code>${escapeHtml(featureId)}</code>`,
+		t("config_ui.periodic.title", { featureId: escapeHtml(featureId) }),
 		"",
-		`<b>Status:</b> ${status} <i>(${tag(o.enabled)})</i>`,
-		`<b>Day:</b> ${dayName} <i>(${tag(o.day)})</i>`,
-		`<b>Hour:</b> ${hourStr} <i>(${tag(o.hour)})</i>`,
-		`<b>Timezone:</b> <code>${tz}</code> <i>(${tag(o.timezone)})</i>`,
-		`<b>Range:</b> ${range} <i>(${tag(o.range)})</i>`,
-		`<b>Pin message:</b> ${pinStr} <i>(${tag(o.pin)})</i>`,
-		`<b>Unpin previous:</b> ${unpinStr} <i>(${tag(o.unpinPrevious)})</i>`,
+		t("config_ui.periodic.status_line", { status, tag: tag(o.enabled) }),
+		t("config_ui.periodic.day_line", { day: dayLong(eff.day), tag: tag(o.day) }),
+		t("config_ui.periodic.hour_line", { hour: hourStr, tag: tag(o.hour) }),
+		t("config_ui.periodic.timezone_line", { timezone: tz, tag: tag(o.timezone) }),
+		t("config_ui.periodic.range_line", { range, tag: tag(o.range) }),
+		t("config_ui.periodic.pin_line", { pin: pinStr, tag: tag(o.pin) }),
+		t("config_ui.periodic.unpin_line", { unpin: unpinStr, tag: tag(o.unpinPrevious) }),
 		"",
-		"Calendars for the broadcast are managed under <b>📅 Calendars</b>.",
-		"Tap <b>🚀 Send preview now</b> to fire a one-off broadcast with the current settings.",
+		t("config_ui.periodic.footer_calendars"),
+		t("config_ui.periodic.footer_preview"),
 	].join("\n");
 }
 
@@ -188,14 +182,16 @@ export function periodicKeyboard(chatId: string, featureId: string): InlineKeybo
 
 	// Enabled toggle
 	rows.push([{
-		text: eff.enabled ? "✅ Enabled — tap to disable" : "❌ Disabled — tap to enable",
+		text: eff.enabled
+			? t("config_ui.periodic.button_enabled")
+			: t("config_ui.periodic.button_disabled"),
 		callback_data: `cfg:per:tog:${featureId}`,
 	}]);
 
 	// Day row: Mon, Tue, ..., Sun (reordered from Sun-first to Mon-first for UI).
 	const dayOrder = [1, 2, 3, 4, 5, 6, 0];
 	rows.push(dayOrder.map((d) => ({
-		text: d === eff.day ? `[${DAY_SHORT[d]}]` : ` ${DAY_SHORT[d]} `,
+		text: d === eff.day ? `[${dayShort(d)}]` : ` ${dayShort(d)} `,
 		callback_data: `cfg:per:day:${featureId}:${d}`,
 	})));
 
@@ -213,42 +209,44 @@ export function periodicKeyboard(chatId: string, featureId: string): InlineKeybo
 	}
 
 	// Range row
-	rows.push(RANGES.map((r) => ({
-		text: r.id === eff.range ? `✅ ${r.label}` : r.label,
-		callback_data: `cfg:per:range:${featureId}:${r.id}`,
+	rows.push(RANGE_IDS.map((id) => ({
+		text: id === eff.range ? `✅ ${rangeLabel(id)}` : rangeLabel(id),
+		callback_data: `cfg:per:range:${featureId}:${id}`,
 	})));
 
 	// Timezone editor
 	rows.push([{
-		text: `🌍 ${eff.timezone} — change`,
+		text: t("config_ui.periodic.button_timezone", { timezone: eff.timezone }),
 		callback_data: `cfg:per:tz:${featureId}`,
 	}]);
 
 	// Pin / unpin toggles (side by side)
 	rows.push([
 		{
-			text: `Pin ${eff.pin ? "✅" : "❌"}`,
+			text: t("config_ui.periodic.button_pin", { value: eff.pin ? "✅" : "❌" }),
 			callback_data: `cfg:per:pin:${featureId}`,
 		},
 		{
-			text: `Unpin previous ${eff.unpinPrevious ? "✅" : "❌"}`,
+			text: t("config_ui.periodic.button_unpin_previous", {
+				value: eff.unpinPrevious ? "✅" : "❌",
+			}),
 			callback_data: `cfg:per:unpin:${featureId}`,
 		},
 	]);
 
 	// Preview
 	rows.push([{
-		text: "🚀 Send preview now",
+		text: t("config_ui.periodic.button_preview"),
 		callback_data: `cfg:per:preview:${featureId}`,
 	}]);
 
 	// Calendars link + reset
 	rows.push([
-		{ text: "📅 Calendars", callback_data: `cfg:cals:${featureId}` },
-		{ text: "🔄 Reset to defaults", callback_data: `cfg:per:reset:${featureId}` },
+		{ text: t("config_ui.periodic.button_calendars"), callback_data: `cfg:cals:${featureId}` },
+		{ text: t("config_ui.periodic.button_reset"), callback_data: `cfg:per:reset:${featureId}` },
 	]);
 
-	rows.push([{ text: "← Back", callback_data: "cfg:main" }]);
+	rows.push([{ text: t("config_ui.common.back"), callback_data: "cfg:main" }]);
 	return rows;
 }
 
@@ -275,7 +273,11 @@ export async function toggleEnabled(
 	const eff = getEffective(chatId, featureId);
 	setPeriodicFields(chatId, featureId, { enabled: !eff.enabled });
 	await showPeriodic(ctx, chatId, featureId);
-	await ctx.answerCallbackQuery({ text: !eff.enabled ? "Enabled" : "Disabled" });
+	await ctx.answerCallbackQuery({
+		text: !eff.enabled
+			? t("config_ui.features.toggle_enabled", { featureId })
+			: t("config_ui.features.toggle_disabled", { featureId }),
+	});
 }
 
 export async function setDay(
@@ -285,12 +287,12 @@ export async function setDay(
 	day: number,
 ): Promise<void> {
 	if (!Number.isInteger(day) || day < 0 || day > 6) {
-		await ctx.answerCallbackQuery({ text: "Invalid day" });
+		await ctx.answerCallbackQuery({ text: t("config_ui.periodic.toast_invalid_day") });
 		return;
 	}
 	setPeriodicFields(chatId, featureId, { day });
 	await showPeriodic(ctx, chatId, featureId);
-	await ctx.answerCallbackQuery({ text: DAY_LONG[day] });
+	await ctx.answerCallbackQuery({ text: dayLong(day) });
 }
 
 export async function setHour(
@@ -300,7 +302,7 @@ export async function setHour(
 	hour: number,
 ): Promise<void> {
 	if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
-		await ctx.answerCallbackQuery({ text: "Invalid hour" });
+		await ctx.answerCallbackQuery({ text: t("config_ui.periodic.toast_invalid_hour") });
 		return;
 	}
 	setPeriodicFields(chatId, featureId, { hour });
@@ -314,8 +316,8 @@ export async function setRange(
 	featureId: string,
 	range: string,
 ): Promise<void> {
-	if (!RANGES.some((r) => r.id === range)) {
-		await ctx.answerCallbackQuery({ text: "Invalid range" });
+	if (!RANGE_IDS.includes(range as typeof RANGE_IDS[number])) {
+		await ctx.answerCallbackQuery({ text: t("config_ui.periodic.toast_invalid_range") });
 		return;
 	}
 	setPeriodicFields(chatId, featureId, { range });
@@ -357,7 +359,7 @@ export async function resetPeriodic(
 		data: { periodic: undefined },
 	});
 	await showPeriodic(ctx, chatId, featureId);
-	await ctx.answerCallbackQuery({ text: "Reset to operator defaults" });
+	await ctx.answerCallbackQuery({ text: t("config_ui.periodic.toast_reset") });
 }
 
 export async function promptEditTimezone(
@@ -374,16 +376,7 @@ export async function promptEditTimezone(
 		menuMessageId,
 	});
 	await ctx.answerCallbackQuery();
-	await ctx.reply(
-		[
-			"🌍 <b>Send me an IANA timezone.</b>",
-			"",
-			"Examples: <code>Europe/Zurich</code>, <code>America/New_York</code>, <code>Pacific/Auckland</code>.",
-			"",
-			"Send /cancel to keep the current timezone.",
-		].join("\n"),
-		{ parse_mode: "HTML" },
-	);
+	await ctx.reply(t("config_ui.periodic.tz_prompt_html"), { parse_mode: "HTML" });
 }
 
 export async function handleTimezoneInput(
@@ -395,34 +388,21 @@ export async function handleTimezoneInput(
 ): Promise<void> {
 	const trimmed = text.trim();
 	if (trimmed.length === 0) {
-		await ctx.reply(
-			[
-				"Timezone can't be empty.",
-				"",
-				"Send one like <code>Europe/Zurich</code>, or /cancel to keep the current timezone.",
-			].join("\n"),
-			{ parse_mode: "HTML" },
-		);
+		await ctx.reply(t("config_ui.periodic.tz_empty"), { parse_mode: "HTML" });
 		return;
 	}
 	try {
 		new Intl.DateTimeFormat("en-US", { timeZone: trimmed }).format(new Date());
 	} catch {
 		await ctx.reply(
-			[
-				`<code>${escapeHtml(trimmed)}</code> isn't a valid IANA timezone.`,
-				"",
-				"Examples: <code>Europe/Zurich</code>, <code>America/New_York</code>, <code>Pacific/Auckland</code>.",
-				"",
-				"Send /cancel to keep the current timezone, or try again.",
-			].join("\n"),
+			t("config_ui.periodic.tz_invalid", { input: escapeHtml(trimmed) }),
 			{ parse_mode: "HTML" },
 		);
 		return;
 	}
 	setPeriodicFields(chatId, featureId, { timezone: trimmed });
 	clearPendingInput(chatId, userId);
-	await ctx.reply(`✅ Timezone set to <code>${escapeHtml(trimmed)}</code>.`, {
+	await ctx.reply(t("config_ui.periodic.tz_set", { timezone: escapeHtml(trimmed) }), {
 		parse_mode: "HTML",
 	});
 }
@@ -434,10 +414,11 @@ export async function triggerPreview(
 ): Promise<void> {
 	try {
 		await runPeriodicNow(chatId, ctx.api);
-		await ctx.answerCallbackQuery({ text: "Preview sent" });
+		await ctx.answerCallbackQuery({ text: t("config_ui.periodic.toast_preview_sent") });
 	} catch (err) {
 		await ctx.answerCallbackQuery({
-			text: `Preview failed: ${(err as Error).message}`.slice(0, 200),
+			text: t("config_ui.periodic.toast_preview_failed", { error: (err as Error).message })
+				.slice(0, 200),
 			show_alert: true,
 		});
 	}

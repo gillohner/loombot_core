@@ -9,6 +9,7 @@ import { userIsAdmin } from "@middleware/admin.ts";
 import { pubkyWriter } from "@core/pubky/writer.ts";
 import { rememberChat } from "@core/config/store.ts";
 import { registerConfigUi, routeConfigTextInput, sendMainMenu } from "@middleware/config_ui/mod.ts";
+import { t } from "@core/i18n/mod.ts";
 
 const CORE_PUBLIC_COMMANDS: string[] = ["start"];
 const CORE_ADMIN_ONLY: string[] = ["config"];
@@ -103,14 +104,14 @@ export function buildMiddleware() {
 
 			if (command === "start") {
 				await publishCommands(ctx, chatId);
-				await ctx.reply("Hi! I'm configured per-chat. Admins can run /config to pick features.");
+				await ctx.reply(t("core.start_welcome"));
 				await deleteTriggerSafe(ctx);
 				return;
 			}
 
 			if (command === "config") {
 				if (!(await userIsAdmin(ctx))) {
-					await ctx.reply("Admin only.");
+					await ctx.reply(t("core.admin_only"));
 					await deleteTriggerSafe(ctx);
 					return;
 				}
@@ -135,7 +136,7 @@ export function buildMiddleware() {
 	composer.callbackQuery(/^pubky:(approve|reject):(.+)$/, async (ctx: Context) => {
 		const match = /^pubky:(approve|reject):(.+)$/.exec(ctx.callbackQuery?.data ?? "");
 		if (!match) {
-			await ctx.answerCallbackQuery({ text: "Invalid callback" });
+			await ctx.answerCallbackQuery({ text: t("pubky.invalid_callback") });
 			return;
 		}
 		const action = match[1];
@@ -143,7 +144,7 @@ export function buildMiddleware() {
 
 		const adminGroup = pubkyWriter.getAdminGroup();
 		if (adminGroup && String(ctx.chat?.id) !== String(adminGroup)) {
-			await ctx.answerCallbackQuery({ text: "Not authorized" });
+			await ctx.answerCallbackQuery({ text: t("pubky.not_authorized") });
 			return;
 		}
 
@@ -155,8 +156,8 @@ export function buildMiddleware() {
 			try {
 				const originalText = ctx.callbackQuery?.message?.text ?? "";
 				await ctx.editMessageText(
-					originalText + `\n\n✅ **Approved** by ${adminName}` +
-						(result.success ? " - Written successfully" : " - ⚠️ Write failed"),
+					originalText + "\n\n" + t("pubky.approved_by", { name: adminName }) +
+						(result.success ? t("pubky.write_ok") : t("pubky.write_failed")),
 					{ parse_mode: "Markdown" },
 				);
 			} catch { /* ignore */ }
@@ -166,7 +167,7 @@ export function buildMiddleware() {
 			try {
 				const originalText = ctx.callbackQuery?.message?.text ?? "";
 				await ctx.editMessageText(
-					originalText + `\n\n❌ **Rejected** by ${adminName}`,
+					originalText + "\n\n" + t("pubky.rejected_by", { name: adminName }),
 					{ parse_mode: "Markdown" },
 				);
 			} catch { /* ignore */ }

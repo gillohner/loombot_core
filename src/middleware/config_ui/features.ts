@@ -6,6 +6,7 @@ import type { Context } from "grammy";
 import { getOperatorConfig } from "@core/config/runtime.ts";
 import { resolveChatConfig, type ResolvedFeature } from "@core/config/merge.ts";
 import { setChatFeatureOverride } from "@core/config/store.ts";
+import { t } from "@core/i18n/mod.ts";
 import type { InlineKeyboard } from "@middleware/config_ui/types.ts";
 
 function prettyLabel(feature: ResolvedFeature): string {
@@ -31,14 +32,14 @@ export function featuresKeyboard(chatId: string, chatType?: string): InlineKeybo
 		]);
 	}
 	if (rows.length === 0) {
-		rows.push([{ text: "(no toggleable features)", callback_data: "cfg:feats" }]);
+		rows.push([{ text: t("config_ui.features.empty"), callback_data: "cfg:feats" }]);
 	}
-	rows.push([{ text: "← Back", callback_data: "cfg:main" }]);
+	rows.push([{ text: t("config_ui.common.back"), callback_data: "cfg:main" }]);
 	return rows;
 }
 
 export function featuresText(): string {
-	return "🧩 <b>Features</b>\n\nTap to toggle. Locked features don't appear here.";
+	return t("config_ui.features.title");
 }
 
 export async function showFeatures(ctx: Context, chatId: string): Promise<void> {
@@ -63,12 +64,17 @@ export async function toggleFeature(
 	});
 	const feature = resolved.features.find((f) => f.featureId === featureId);
 	if (!feature || feature.lock) {
-		await ctx.answerCallbackQuery({ text: "Feature is locked by operator", show_alert: false });
+		await ctx.answerCallbackQuery({
+			text: t("config_ui.features.locked_by_operator"),
+			show_alert: false,
+		});
 		return;
 	}
 	setChatFeatureOverride(chatId, featureId, { enabled: !feature.enabled });
 	await showFeatures(ctx, chatId);
 	await ctx.answerCallbackQuery({
-		text: !feature.enabled ? `Enabled ${featureId}` : `Disabled ${featureId}`,
+		text: !feature.enabled
+			? t("config_ui.features.toggle_enabled", { featureId })
+			: t("config_ui.features.toggle_disabled", { featureId }),
 	});
 }

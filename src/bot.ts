@@ -46,8 +46,9 @@ export async function createBot(): Promise<Bot> {
 		// so writes without an admin group surface a clear warning instead of
 		// silently posting to chat 0.
 		const rawAdminGroup = config.pubky.approval_group_chat_id;
-		const adminGroup =
-			rawAdminGroup && String(rawAdminGroup) !== "0" ? String(rawAdminGroup) : undefined;
+		const adminGroup = rawAdminGroup && String(rawAdminGroup) !== "0"
+			? String(rawAdminGroup)
+			: undefined;
 		if (!adminGroup) {
 			log.warn("pubky.writer.no_admin_group", {
 				hint:

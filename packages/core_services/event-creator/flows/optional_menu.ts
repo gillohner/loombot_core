@@ -14,6 +14,7 @@ import type { EventCreatorConfig, EventCreatorState } from "../types.ts";
 import { isCalendarSelectionEnabled } from "../utils/calendar.ts";
 import { escapeHtml } from "../utils/formatting.ts";
 import { buildEventSummary } from "../utils/preview.ts";
+import { tev, tfor } from "../utils/i18n.ts";
 import {
 	normalizeDate,
 	parseDateParts,
@@ -35,6 +36,7 @@ export function showOptionalMenu(
 	extraOpts?: Record<string, unknown>,
 ) {
 	const config = (ev.serviceConfig ?? {}) as EventCreatorConfig;
+	const t = tfor(ev.language);
 
 	const reqMark = (field: string) => {
 		const map: Record<string, keyof typeof config> = {
@@ -48,28 +50,28 @@ export function showOptionalMenu(
 
 	const keyboard = UIBuilder.keyboard()
 		.namespace(SERVICE_ID)
-		.callback(`📝 Add/Edit Description`, "menu:description")
+		.callback(t("menu.button_description"), "menu:description")
 		.row()
-		.callback(`🖼️ Add/Edit Image${reqMark("image")}`, "menu:image")
+		.callback(t("menu.button_image", { required: reqMark("image") }), "menu:image")
 		.row()
-		.callback(`📍 Add/Edit Location${reqMark("location")}`, "menu:location")
+		.callback(t("menu.button_location", { required: reqMark("location") }), "menu:location")
 		.row()
-		.callback(`⏰ Add/Edit End Time${reqMark("endtime")}`, "menu:endtime")
+		.callback(t("menu.button_endtime", { required: reqMark("endtime") }), "menu:endtime")
 		.row();
 
 	// Show calendar selector only if multiple calendars configured
 	if (isCalendarSelectionEnabled(config)) {
-		keyboard.callback("📅 Select Calendars", "menu:calendars").row();
+		keyboard.callback(t("menu.button_calendars"), "menu:calendars").row();
 	}
 
 	keyboard
-		.callback("✏️ Edit Required Fields", "menu:edit")
+		.callback(t("menu.button_edit"), "menu:edit")
 		.row()
-		.callback("✅ Submit Event", "menu:submit", "primary")
-		.callback("❌ Cancel", "menu:cancel", "danger");
+		.callback(t("menu.button_submit"), "menu:submit", "primary")
+		.callback(t("menu.button_cancel"), "menu:cancel", "danger");
 
-	const summary = buildEventSummary(st, config);
-	const message = `${summary}\n\n<b>What would you like to do?</b>`;
+	const summary = buildEventSummary(st, config, ev.language);
+	const message = `${summary}\n\n${t("menu.what_next")}`;
 
 	return uiKeyboard(keyboard.build(), message, {
 		state: state.replace(st),
@@ -86,8 +88,7 @@ export function handleOptionalMenuAction(
 	switch (action) {
 		case "description":
 			return reply(
-				"📝 <b>Add Description</b>\n\n" +
-					'Enter a description for your event (or type "skip" to cancel):',
+				tev(ev, "optional.description_title") + "\n\n" + tev(ev, "optional.description_prompt"),
 				{
 					state: state.merge({ waitingFor: "description" }),
 					options: { parse_mode: "HTML", cleanupGroup: MENU_REPLACE_GROUP },
@@ -96,8 +97,7 @@ export function handleOptionalMenuAction(
 
 		case "image":
 			return reply(
-				"🖼️ <b>Add Image</b>\n\n" +
-					'Send a photo for your event (or type "skip" to cancel):',
+				tev(ev, "optional.image_title") + "\n\n" + tev(ev, "optional.image_prompt"),
 				{
 					state: state.merge({ waitingFor: "image" }),
 					options: { parse_mode: "HTML", cleanupGroup: MENU_REPLACE_GROUP },
@@ -105,12 +105,11 @@ export function handleOptionalMenuAction(
 			);
 
 		case "location":
-			return showLocationTypeMenu(st);
+			return showLocationTypeMenu(st, ev);
 
 		case "endtime":
 			return reply(
-				"⏰ <b>Add End Time</b>\n\n" +
-					'First, enter the end date (DD.MM.YYYY) or type "skip" to cancel:',
+				tev(ev, "optional.endtime_title") + "\n\n" + tev(ev, "optional.endtime_prompt"),
 				{
 					state: state.merge({ waitingFor: "endDate" }),
 					options: { parse_mode: "HTML", cleanupGroup: MENU_REPLACE_GROUP },
@@ -160,7 +159,7 @@ export function handleOptionalFieldInput(ev: MessageEvent) {
 
 		// If document is not an image, tell the user
 		if (message.document) {
-			return reply("Please send an image file (JPEG, PNG, etc.), not other file types.");
+			return reply(tev(ev, "optional.not_image"));
 		}
 	}
 
@@ -200,7 +199,7 @@ export function handleOptionalFieldInput(ev: MessageEvent) {
 }
 
 function handleDescriptionInput(text: string, st: EventCreatorState, ev: MessageEvent) {
-	const validation = validateDescription(text);
+	const validation = validateDescription(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
 	}
@@ -215,7 +214,7 @@ function handleDescriptionInput(text: string, st: EventCreatorState, ev: Message
 }
 
 function handleLocationInput(text: string, st: EventCreatorState, ev: MessageEvent) {
-	const validation = validateLocationName(text);
+	const validation = validateLocationName(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
 	}
@@ -229,8 +228,8 @@ function handleLocationInput(text: string, st: EventCreatorState, ev: MessageEve
 	return showOptionalMenu(updatedState, ev);
 }
 
-function handleEndDateInput(text: string, st: EventCreatorState, _ev: MessageEvent) {
-	const validation = validateDate(text);
+function handleEndDateInput(text: string, st: EventCreatorState, ev: MessageEvent) {
+	const validation = validateDate(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
 	}
@@ -246,16 +245,18 @@ function handleEndDateInput(text: string, st: EventCreatorState, _ev: MessageEve
 			const endVal = endParts.year * 10000 + endParts.month * 100 + endParts.day;
 			if (endVal < startVal) {
 				return reply(
-					`End date (${normalized}) is before the start date (${st.startDate}).\n\n` +
-						`Please enter an end date on or after the start date:`,
+					tev(ev, "optional.end_before_start", { end: normalized, start: st.startDate }) +
+						"\n\n" +
+						tev(ev, "optional.end_before_start_hint"),
 				);
 			}
 		}
 	}
 
 	return reply(
-		`✅ End date: <b>${escapeHtml(normalized)}</b>\n\n` +
-			`Now enter the end time (HH:MM):`,
+		tev(ev, "optional.end_date_ok", { date: escapeHtml(normalized) }) +
+			"\n\n" +
+			tev(ev, "optional.end_time_prompt"),
 		{
 			state: state.merge({
 				endDate: normalized,
@@ -267,7 +268,7 @@ function handleEndDateInput(text: string, st: EventCreatorState, _ev: MessageEve
 }
 
 function handleEndTimeInput(text: string, st: EventCreatorState, ev: MessageEvent) {
-	const timeValidation = validateTime(text);
+	const timeValidation = validateTime(text, ev.language);
 	if (!timeValidation.valid) {
 		return reply(timeValidation.error!);
 	}
@@ -278,6 +279,7 @@ function handleEndTimeInput(text: string, st: EventCreatorState, ev: MessageEven
 		st.startTime!,
 		st.endDate!,
 		text,
+		ev.language,
 	);
 	if (!endValidation.valid) {
 		return reply(endValidation.error!);

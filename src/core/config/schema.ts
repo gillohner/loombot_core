@@ -21,11 +21,15 @@ const FeatureSchema = z.object({
 	allow_external_calendars: z.boolean().optional(),
 });
 
+export const SUPPORTED_LANGUAGES = ["en", "de"] as const;
+export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
+
 export const OperatorConfigSchema = z.object({
 	bot: z.object({
 		admin_ids: z.array(z.union([z.string(), z.number()])).default([]),
 		lock_dm_config: z.boolean().default(false),
-	}).default({ admin_ids: [], lock_dm_config: false }),
+		language: z.enum(SUPPORTED_LANGUAGES).default("en"),
+	}).default({ admin_ids: [], lock_dm_config: false, language: "en" }),
 	pubky: z.object({
 		enabled: z.boolean().default(false),
 		recovery_file: z.string().optional(),

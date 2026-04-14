@@ -9,20 +9,21 @@ import { getAllCalendarUris } from "../utils/calendar.ts";
 import { applyTemplate, buildEventUrl, formatDateTime } from "../utils/formatting.ts";
 import { buildAdminPreview } from "../utils/preview.ts";
 import { canSubmit } from "../utils/state.ts";
+import { tev } from "../utils/i18n.ts";
 
 export function handleSubmit(ev: CallbackEvent) {
 	const st = (ev.state ?? {}) as EventCreatorState;
 	const config = (ev.serviceConfig ?? {}) as EventCreatorConfig;
 
 	// Validate can submit
-	const submitCheck = canSubmit(st, config);
+	const submitCheck = canSubmit(st, config, ev.language);
 	if (!submitCheck.canSubmit) {
-		return error(submitCheck.error || "Cannot submit event");
+		return error(submitCheck.error || tev(ev, "submit.cannot_submit"));
 	}
 
 	// Validate timezone if provided
 	if (config.defaultTimezone && !validateTimezone(config.defaultTimezone)) {
-		return error(`Invalid timezone: ${config.defaultTimezone}`);
+		return error(tev(ev, "submit.invalid_timezone", { timezone: config.defaultTimezone }));
 	}
 
 	// Format the datetime
@@ -60,12 +61,12 @@ export function handleSubmit(ev: CallbackEvent) {
 	});
 
 	// Build preview for admin approval
-	const preview = buildAdminPreview(result.event, st, config);
+	const preview = buildAdminPreview(result.event, st, config, ev.language);
 
 	// Build return message with eventky.app URL
 	const userId = ev.botPublicKey;
 	if (!userId) {
-		return error("Bot public key not available");
+		return error(tev(ev, "submit.bot_key_unavailable"));
 	}
 
 	const eventUrl = buildEventUrl(userId, result.meta.id);

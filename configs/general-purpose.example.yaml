@@ -18,6 +18,12 @@
 bot:
   # Telegram user id(s) that should be super-admin everywhere. Optional.
   admin_ids: []
+  # Language used for bot code-level strings (/config menu, service errors,
+  # date formatting). Supported: en | de. Operator-configured text below
+  # (help.message, welcome.message, triggerword responses, link labels) is
+  # written by you and NOT translated — keep it in whatever language matches
+  # this setting.
+  language: en
   lock_dm_config: false
 
 pubky:

@@ -3,6 +3,7 @@ import { buildSnapshot } from "@core/snapshot/snapshot.ts";
 import { sandboxHost } from "@core/sandbox/host.ts";
 import { log } from "@core/util/logger.ts";
 import { pubkyWriter } from "@core/pubky/writer.ts";
+import { getLocale } from "@core/i18n/mod.ts";
 import {
 	applyStateDirective,
 	clearActiveFlow,
@@ -61,6 +62,7 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 				routeMeta: route.meta,
 				datasets: route.datasets,
 				botPublicKey: pubkyWriter.getPublicKey() ?? undefined,
+				locale: getLocale(),
 			},
 			manifest: { schemaVersion: 1 },
 		};
@@ -183,6 +185,7 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 				routeMeta: route.meta,
 				datasets: route.datasets,
 				botPublicKey: pubkyWriter.getPublicKey() ?? undefined,
+				locale: getLocale(),
 			},
 			manifest: { schemaVersion: 1 },
 		};
@@ -320,6 +323,7 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 					routeMeta: listener.meta,
 					datasets: listener.datasets,
 					botPublicKey: pubkyWriter.getPublicKey() ?? undefined,
+					locale: getLocale(),
 				},
 				manifest: { schemaVersion: 1 },
 			};

@@ -6,6 +6,7 @@ import type { EventCreatorState } from "../types.ts";
 import { handleRequiredFieldInput } from "../flows/required.ts";
 import { handleEditFieldInput } from "../flows/edit.ts";
 import { handleOptionalFieldInput } from "../flows/optional_menu.ts";
+import { tev } from "../utils/i18n.ts";
 
 export function handleMessage(ev: MessageEvent) {
 	const st = (ev.state ?? {}) as EventCreatorState;
@@ -22,7 +23,7 @@ export function handleMessage(ev: MessageEvent) {
 			return handleOptionalFieldInput(ev);
 
 		default:
-			return reply("Please start by using the /newevent command.", {
+			return reply(tev(ev, "menu.start_first"), {
 				state: state.clear(),
 			});
 	}

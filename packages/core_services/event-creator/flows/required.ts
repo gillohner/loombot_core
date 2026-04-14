@@ -6,6 +6,7 @@ import { REQ_STEP_DATE, REQ_STEP_TIME, REQ_STEP_TITLE } from "../constants.ts";
 import type { EventCreatorState } from "../types.ts";
 import { escapeHtml } from "../utils/formatting.ts";
 import { normalizeDate, validateDate, validateTime, validateTitle } from "../utils/validation.ts";
+import { tev } from "../utils/i18n.ts";
 import { showOptionalMenu } from "./optional_menu.ts";
 
 export function handleRequiredFieldInput(ev: MessageEvent) {
@@ -15,31 +16,33 @@ export function handleRequiredFieldInput(ev: MessageEvent) {
 
 	switch (step) {
 		case REQ_STEP_TITLE:
-			return handleTitleInput(text, st);
+			return handleTitleInput(text, st, ev);
 
 		case REQ_STEP_DATE:
-			return handleDateInput(text, st);
+			return handleDateInput(text, st, ev);
 
 		case REQ_STEP_TIME:
 			return handleTimeInput(text, st, ev);
 
 		default:
-			return reply("Something went wrong. Please start over with /newevent", {
+			return reply(tev(ev, "required.something_wrong"), {
 				state: state.clear(),
 			});
 	}
 }
 
-function handleTitleInput(text: string, _st: EventCreatorState) {
-	const validation = validateTitle(text);
+function handleTitleInput(text: string, _st: EventCreatorState, ev: MessageEvent) {
+	const validation = validateTitle(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
 	}
 
 	return reply(
-		`✅ Title: <b>${escapeHtml(text)}</b>\n\n` +
-			`📝 <b>Step 2/3</b>: When is the event? (DD.MM.YYYY)\n\n` +
-			`Example: 23.04.2026`,
+		tev(ev, "required.title_ok", { title: escapeHtml(text) }) +
+			"\n\n" +
+			tev(ev, "required.step_date") +
+			"\n\n" +
+			tev(ev, "required.step_date_example"),
 		{
 			state: state.merge({
 				requirementStep: REQ_STEP_DATE,
@@ -50,8 +53,8 @@ function handleTitleInput(text: string, _st: EventCreatorState) {
 	);
 }
 
-function handleDateInput(text: string, _st: EventCreatorState) {
-	const validation = validateDate(text);
+function handleDateInput(text: string, _st: EventCreatorState, ev: MessageEvent) {
+	const validation = validateDate(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
 	}
@@ -59,9 +62,11 @@ function handleDateInput(text: string, _st: EventCreatorState) {
 	const normalized = normalizeDate(text) ?? text;
 
 	return reply(
-		`✅ Date: <b>${escapeHtml(normalized)}</b>\n\n` +
-			`📝 <b>Step 3/3</b>: What time? (HH:MM in 24h format)\n\n` +
-			`Example: 19:30`,
+		tev(ev, "required.date_ok", { date: escapeHtml(normalized) }) +
+			"\n\n" +
+			tev(ev, "required.step_time") +
+			"\n\n" +
+			tev(ev, "required.step_time_example"),
 		{
 			state: state.merge({
 				requirementStep: REQ_STEP_TIME,
@@ -73,7 +78,7 @@ function handleDateInput(text: string, _st: EventCreatorState) {
 }
 
 function handleTimeInput(text: string, st: EventCreatorState, ev: MessageEvent) {
-	const validation = validateTime(text);
+	const validation = validateTime(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
 	}

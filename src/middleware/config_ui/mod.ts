@@ -7,6 +7,7 @@
 import { Composer, type Context } from "grammy";
 import { userIsAdmin } from "@middleware/admin.ts";
 import { log } from "@core/util/logger.ts";
+import { t } from "@core/i18n/mod.ts";
 import { editToMainMenu, sendMainMenu } from "@middleware/config_ui/menu.ts";
 import { showFeatures, toggleFeature } from "@middleware/config_ui/features.ts";
 import {
@@ -45,7 +46,10 @@ export function registerConfigUi(composer: Composer<Context>): void {
 		const data = ctx.callbackQuery?.data ?? "";
 
 		if (!(await userIsAdmin(ctx))) {
-			await ctx.answerCallbackQuery({ text: "Admin only", show_alert: false });
+			await ctx.answerCallbackQuery({
+				text: t("config_ui.toast.admin_only"),
+				show_alert: false,
+			});
 			return;
 		}
 
@@ -55,7 +59,7 @@ export function registerConfigUi(composer: Composer<Context>): void {
 				try {
 					await ctx.deleteMessage();
 				} catch {
-					await ctx.editMessageText("(closed)");
+					await ctx.editMessageText(t("config_ui.common.closed_placeholder"));
 				}
 				await ctx.answerCallbackQuery();
 				return;
@@ -157,10 +161,10 @@ export function registerConfigUi(composer: Composer<Context>): void {
 				return;
 			}
 
-			await ctx.answerCallbackQuery({ text: "Unknown action" });
+			await ctx.answerCallbackQuery({ text: t("config_ui.toast.unknown_action") });
 		} catch (err) {
 			log.error("config_ui.error", { error: (err as Error).message, data });
-			await ctx.answerCallbackQuery({ text: "Error" });
+			await ctx.answerCallbackQuery({ text: t("config_ui.toast.error") });
 		}
 	});
 }
@@ -179,7 +183,7 @@ export async function routeConfigTextInput(ctx: Context): Promise<boolean> {
 	const text = ctx.message?.text ?? "";
 	if (text === "/cancel" || text.startsWith("/cancel ")) {
 		clearPendingInput(chatId, userId);
-		await ctx.reply("Cancelled.");
+		await ctx.reply(t("config_ui.toast.cancelled"));
 		return true;
 	}
 

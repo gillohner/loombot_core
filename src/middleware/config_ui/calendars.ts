@@ -8,6 +8,7 @@ import { getOperatorConfig } from "@core/config/runtime.ts";
 import { getChatFeatureOverride, setChatFeatureOverride } from "@core/config/store.ts";
 import { fetchCalendarMeta, isValidCalendarUri } from "@core/pubky/calendar_meta.ts";
 import { clearPendingInput, setPendingInput } from "@middleware/config_ui/state.ts";
+import { t } from "@core/i18n/mod.ts";
 import type { InlineKeyboard } from "@middleware/config_ui/types.ts";
 
 interface CuratedCalendar {
@@ -52,7 +53,7 @@ function getSelection(chatId: string, featureId: string): {
 }
 
 export function calendarsText(featureId: string): string {
-	return `📅 <b>Calendars</b>\n\nPick which calendars show in this chat for <code>${featureId}</code>.`;
+	return t("config_ui.calendars.title", { featureId });
 }
 
 export function calendarsKeyboard(
@@ -60,7 +61,7 @@ export function calendarsKeyboard(
 	featureId: string,
 ): InlineKeyboard {
 	const curated = getCuratedCalendars(featureId);
-	if (!curated) return [[{ text: "← Back", callback_data: "cfg:main" }]];
+	if (!curated) return [[{ text: t("config_ui.common.back"), callback_data: "cfg:main" }]];
 
 	const { selected, external, usingDefaults } = getSelection(chatId, featureId);
 	const rows: InlineKeyboard = [];
@@ -74,23 +75,24 @@ export function calendarsKeyboard(
 		}]);
 	}
 
+	const extPrefix = t("config_ui.calendars.external_prefix");
 	external.forEach((uri, idx) => {
 		// Truncate for display.
 		const display = uri.length > 40 ? uri.slice(0, 20) + "…" + uri.slice(-15) : uri;
 		rows.push([{
-			text: `✅ external: ${display}`,
+			text: `✅ ${extPrefix} ${display}`,
 			callback_data: `cfg:cal:ext_rm:${featureId}:${idx}`,
 		}]);
 	});
 
 	if (curated.feature.allow_external) {
 		rows.push([{
-			text: "➕ Add external calendar",
+			text: t("config_ui.calendars.add_external"),
 			callback_data: `cfg:cal:ext_add:${featureId}`,
 		}]);
 	}
 
-	rows.push([{ text: "← Back", callback_data: "cfg:main" }]);
+	rows.push([{ text: t("config_ui.common.back"), callback_data: "cfg:main" }]);
 	return rows;
 }
 
@@ -151,7 +153,7 @@ export async function removeExternalCalendar(
 		},
 	});
 	await showCalendars(ctx, chatId, featureId);
-	await ctx.answerCallbackQuery({ text: "Removed" });
+	await ctx.answerCallbackQuery({ text: t("config_ui.calendars.removed_toast") });
 }
 
 export async function promptAddExternalCalendar(
@@ -162,7 +164,7 @@ export async function promptAddExternalCalendar(
 ): Promise<void> {
 	const curated = getCuratedCalendars(featureId);
 	if (!curated?.feature.allow_external) {
-		await ctx.answerCallbackQuery({ text: "Not allowed" });
+		await ctx.answerCallbackQuery({ text: t("config_ui.calendars.not_allowed_toast") });
 		return;
 	}
 	const menuMessageId = ctx.callbackQuery?.message?.message_id;
@@ -173,16 +175,7 @@ export async function promptAddExternalCalendar(
 		menuMessageId,
 	});
 	await ctx.answerCallbackQuery();
-	await ctx.reply(
-		[
-			"📅 <b>Send me a <code>pubky://</code> calendar URI to add.</b>",
-			"",
-			"Format: <code>pubky://&lt;52-char-pk&gt;/pub/eventky.app/calendars/&lt;calendarId&gt;</code>",
-			"",
-			"Send /cancel to go back without adding anything.",
-		].join("\n"),
-		{ parse_mode: "HTML" },
-	);
+	await ctx.reply(t("config_ui.calendars.prompt_html"), { parse_mode: "HTML" });
 }
 
 // Called from the text handler in router.ts when a user has a pending input.
@@ -195,34 +188,19 @@ export async function handleExternalCalendarInput(
 ): Promise<void> {
 	const trimmed = text.trim();
 	if (!isValidCalendarUri(trimmed)) {
-		await ctx.reply(
-			[
-				"That doesn't look like a valid calendar URI.",
-				"",
-				"Expected: <code>pubky://&lt;52-char-pk&gt;/pub/eventky.app/calendars/&lt;calendarId&gt;</code>",
-				"",
-				"Send /cancel to go back, or try again.",
-			].join("\n"),
-			{ parse_mode: "HTML" },
-		);
+		await ctx.reply(t("config_ui.calendars.invalid_uri_html"), { parse_mode: "HTML" });
 		return;
 	}
 
 	const meta = await fetchCalendarMeta(trimmed);
 	if (!meta) {
-		await ctx.reply(
-			[
-				"Couldn't reach that calendar — the URI may be wrong or the homeserver may be down.",
-				"",
-				"Send /cancel to go back, or try again.",
-			].join("\n"),
-		);
+		await ctx.reply(t("config_ui.calendars.fetch_failed"));
 		return;
 	}
 
 	const { selected, external, usingDefaults } = getSelection(chatId, featureId);
 	if (external.includes(meta.uri)) {
-		await ctx.reply("That calendar is already in the list. Tap /config to review.");
+		await ctx.reply(t("config_ui.calendars.already_added"));
 		clearPendingInput(chatId, userId);
 		return;
 	}
@@ -233,6 +211,8 @@ export async function handleExternalCalendarInput(
 		},
 	});
 	clearPendingInput(chatId, userId);
-	const label = meta.name ? `"${meta.name}"` : "the calendar";
-	await ctx.reply(`✅ Added ${label}. Tap /config to review.`, { parse_mode: "HTML" });
+	const label = meta.name
+		? t("config_ui.calendars.label_named", { name: meta.name })
+		: t("config_ui.calendars.label_unnamed");
+	await ctx.reply(t("config_ui.calendars.added_toast", { label }), { parse_mode: "HTML" });
 }

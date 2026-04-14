@@ -5,15 +5,19 @@ import type { PubkyAppEvent } from "@eventky/mod.ts";
 import type { EventCreatorConfig, EventCreatorState } from "../types.ts";
 import { escapeHtml, truncate } from "./formatting.ts";
 import { getAllCalendarUris, getCalendarName } from "./calendar.ts";
+import { tfor } from "./i18n.ts";
 
 /**
- * Build admin preview message for approval flow
+ * Build admin preview message for approval flow.
+ * Admin-facing; localized to the operator language.
  */
 export function buildAdminPreview(
 	event: PubkyAppEvent,
 	state: EventCreatorState,
 	config: EventCreatorConfig,
+	locale?: string,
 ): string {
+	const t = tfor(locale);
 	const lines: string[] = [
 		`📅 *${event.summary}*`,
 	];
@@ -25,7 +29,7 @@ export function buildAdminPreview(
 	lines.push(`\n📆 ${state.startDate} at ${state.startTime}`);
 
 	if (state.endDate && state.endTime) {
-		lines.push(`⏰ Until ${state.endDate} at ${state.endTime}`);
+		lines.push(t("preview.until", { date: state.endDate, time: state.endTime }));
 	}
 
 	if (event.dtstart_tzid) {
@@ -41,13 +45,13 @@ export function buildAdminPreview(
 	}
 
 	if (state.imageFileId) {
-		lines.push(`🖼️ Image: Included`);
+		lines.push(t("preview.image_included"));
 	}
 
 	// Calendar list
 	const calendars = getAllCalendarUris(state, config);
 	if (calendars.length > 0) {
-		lines.push(`\n📋 Calendars:`);
+		lines.push(`\n${t("preview.calendars_header")}`);
 		for (const uri of calendars) {
 			const name = getCalendarName(uri, config);
 			lines.push(`  • ${name}`);
@@ -63,7 +67,9 @@ export function buildAdminPreview(
 export function buildEventSummary(
 	state: EventCreatorState,
 	config: EventCreatorConfig,
+	locale?: string,
 ): string {
+	const t = tfor(locale);
 	const req = (field: string) => {
 		const map: Record<string, keyof EventCreatorConfig> = {
 			location: "requireLocation",
@@ -75,50 +81,55 @@ export function buildEventSummary(
 	};
 
 	const lines: string[] = [
-		`📋 <b>Event Summary</b>\n`,
-		`📌 <b>Title:</b> ${escapeHtml(state.title || "")}`,
-		`📅 <b>Date:</b> ${escapeHtml(state.startDate || "")}`,
-		`⏰ <b>Time:</b> ${escapeHtml(state.startTime || "")}`,
+		t("menu.header"),
+		"",
+		t("menu.label_title", { value: escapeHtml(state.title || "") }),
+		t("menu.label_date", { value: escapeHtml(state.startDate || "") }),
+		t("menu.label_time", { value: escapeHtml(state.startTime || "") }),
 	];
 
 	// Optional fields
 	if (state.description) {
-		lines.push(`📝 <b>Description:</b> ${escapeHtml(truncate(state.description, 100))}`);
+		lines.push(
+			t("menu.label_description", { value: escapeHtml(truncate(state.description, 100)) }),
+		);
 	} else {
-		lines.push(`📝 <b>Description:</b> <i>(not set)</i>`);
+		lines.push(t("menu.label_description_empty"));
 	}
 
 	if (state.endDate && state.endTime) {
-		lines.push(
-			`⏱️ <b>End${req("endTime")}:</b> ${escapeHtml(state.endDate)} at ${
-				escapeHtml(state.endTime)
-			}`,
-		);
+		lines.push(t("menu.label_end_with", {
+			required: req("endTime"),
+			date: escapeHtml(state.endDate),
+			time: escapeHtml(state.endTime),
+		}));
 	} else {
-		lines.push(`⏱️ <b>End${req("endTime")}:</b> <i>(not set)</i>`);
+		lines.push(t("menu.label_end_empty", { required: req("endTime") }));
 	}
 
 	if (state.location?.name) {
-		const icon = state.location.location_type === "ONLINE" ? "💻" : "📍";
-		const locText = state.location.location_type === "ONLINE"
+		const isOnline = state.location.location_type === "ONLINE";
+		const locText = isOnline
 			? state.location.structured_data || state.location.name
 			: truncate(state.location.name, 50);
-		lines.push(`${icon} <b>Location${req("location")}:</b> ${escapeHtml(locText)}`);
+		const key = isOnline ? "menu.label_location_online" : "menu.label_location_physical";
+		lines.push(t(key, { required: req("location"), value: escapeHtml(locText) }));
 	} else {
-		lines.push(`📍 <b>Location${req("location")}:</b> <i>(not set)</i>`);
+		lines.push(t("menu.label_location_empty", { required: req("location") }));
 	}
 
 	if (state.imageFileId) {
-		lines.push(`🖼️ <b>Image${req("image")}:</b> ✅ Attached`);
+		lines.push(t("menu.label_image_attached", { required: req("image") }));
 	} else {
-		lines.push(`🖼️ <b>Image${req("image")}:</b> <i>(not set)</i>`);
+		lines.push(t("menu.label_image_empty", { required: req("image") }));
 	}
 
 	// Calendar status
 	const calendars = getAllCalendarUris(state, config);
 	if (calendars.length > 0) {
 		const calNames = calendars.map((uri) => escapeHtml(getCalendarName(uri, config)));
-		lines.push(`\n📋 <b>Calendars:</b> ${calNames.join(", ")}`);
+		lines.push("");
+		lines.push(t("menu.label_calendars", { list: calNames.join(", ") }));
 	}
 
 	return lines.join("\n");

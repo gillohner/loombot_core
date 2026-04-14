@@ -14,6 +14,11 @@ bot:
   # REQUIRED: your Telegram user id so /config works in DMs + any group.
   admin_ids: [784023144, 57066116, 979725167]
   lock_dm_config: false
+  # Language for bot code-level strings (/config menu, service errors,
+  # date formatting). Supported: en | de. The dezentralschweiz profile ships
+  # German operator text (help, welcome, triggerwords, links) so this pairs
+  # with `language: de` by default.
+  language: de
 
 pubky:
   # Required for /meetup_erstellen (event_creator publishes to Pubky).

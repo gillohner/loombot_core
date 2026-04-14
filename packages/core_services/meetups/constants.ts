@@ -66,11 +66,39 @@ export interface MeetupsState {
 
 export type TimelineRangeId = "today" | "week" | "2weeks" | "30days";
 
+// Legacy English labels — kept for backward compatibility. Prefer the locale
+// file in ./locales/{en,de}.ts via `labelForRange(range, locale)` below.
 export const TIMELINE_LABELS: Record<TimelineRangeId, string> = {
 	today: "Today",
 	week: "This week",
 	"2weeks": "Next 2 weeks",
 	"30days": "Next 30 days",
+};
+
+const TIMELINE_LABELS_DE: Record<TimelineRangeId, string> = {
+	today: "Heute",
+	week: "Diese Woche",
+	"2weeks": "Nächste 2 Wochen",
+	"30days": "Nächste 30 Tage",
+};
+
+/** Locale-aware timeline label lookup. `locale` falls back to English. */
+export function labelForRange(range: TimelineRangeId, locale?: string): string {
+	if (locale === "de") return TIMELINE_LABELS_DE[range];
+	return TIMELINE_LABELS[range];
+}
+
+function intlLocaleFor(locale?: string): string {
+	return locale === "de" ? "de-DE" : "en-US";
+}
+
+// Inline two-key table for the "No upcoming events found." fallback. This is
+// called from both the host-side scheduler and the sandboxed meetups service,
+// so the helper can't import the service's locales directly (the service owns
+// those) — we duplicate the two strings here intentionally.
+const NO_EVENTS_LABELS: Record<string, string> = {
+	en: "No upcoming events found.",
+	de: "Keine bevorstehenden Events.",
 };
 
 export const DEFAULT_TIMELINE_OPTIONS: TimelineRangeId[] = ["today", "week", "2weeks", "30days"];
@@ -383,17 +411,18 @@ export function extractLocationName(locationsJson: string | null | undefined): s
 
 /**
  * Format an ISO 8601 datetime string for display.
- * Returns a human-readable date/time string.
+ * Returns a human-readable date/time string in the given locale.
  */
-export function formatEventDate(dtstart: string, dtend?: string): string {
+export function formatEventDate(dtstart: string, dtend?: string, locale?: string): string {
 	try {
+		const intl = intlLocaleFor(locale);
 		const start = new Date(dtstart);
-		const dateStr = start.toLocaleDateString("en-US", {
+		const dateStr = start.toLocaleDateString(intl, {
 			weekday: "short",
 			month: "short",
 			day: "numeric",
 		});
-		const timeStr = start.toLocaleTimeString("en-US", {
+		const timeStr = start.toLocaleTimeString(intl, {
 			hour: "2-digit",
 			minute: "2-digit",
 			hour12: false,
@@ -405,19 +434,19 @@ export function formatEventDate(dtstart: string, dtend?: string): string {
 			const end = new Date(dtend);
 			const sameDay = start.toDateString() === end.toDateString();
 			if (sameDay) {
-				const endTime = end.toLocaleTimeString("en-US", {
+				const endTime = end.toLocaleTimeString(intl, {
 					hour: "2-digit",
 					minute: "2-digit",
 					hour12: false,
 				});
 				result += `\u2013${endTime}`;
 			} else {
-				const endDateStr = end.toLocaleDateString("en-US", {
+				const endDateStr = end.toLocaleDateString(intl, {
 					weekday: "short",
 					month: "short",
 					day: "numeric",
 				});
-				const endTime = end.toLocaleTimeString("en-US", {
+				const endTime = end.toLocaleTimeString(intl, {
 					hour: "2-digit",
 					minute: "2-digit",
 					hour12: false,
@@ -435,20 +464,24 @@ export function formatEventDate(dtstart: string, dtend?: string): string {
 /**
  * Format a list of event occurrences as an HTML message.
  * When eventkyBaseUrl is provided, event titles link to their eventky page.
+ * `locale` controls the "No upcoming events found." fallback and the date
+ * formatting for each event.
  */
 export function formatEventsMessage(
 	occurrences: EventOccurrence[],
 	title: string,
 	eventkyBaseUrl?: string,
+	locale?: string,
 ): string {
 	if (occurrences.length === 0) {
-		return `<b>${escapeHtml(title)}</b>\n\nNo upcoming events found.`;
+		const noEvents = NO_EVENTS_LABELS[locale ?? "en"] ?? NO_EVENTS_LABELS.en;
+		return `<b>${escapeHtml(title)}</b>\n\n${noEvents}`;
 	}
 
 	let text = `<b>${escapeHtml(title)}</b>\n`;
 
 	for (const occ of occurrences) {
-		const date = formatEventDate(occ.occurrenceStart, occ.occurrenceEnd);
+		const date = formatEventDate(occ.occurrenceStart, occ.occurrenceEnd, locale);
 		const name = escapeHtml(occ.summary);
 		let eventUrl = eventkyBaseUrl ? buildEventkyEventUrl(occ.uri, eventkyBaseUrl) : "";
 		// For recurring events, link to the specific occurrence
@@ -534,6 +567,15 @@ export function buildEventkyEventUrl(eventUri: string, baseUrl: string): string 
 	return `${baseUrl.replace(/\/$/, "")}/event/${pk}/${eventId}`;
 }
 
+const DEFAULT_TITLE_LABELS: Record<string, string> = {
+	en: "Upcoming Events",
+	de: "Kommende Events",
+};
+
+function defaultTitleFor(locale?: string): string {
+	return DEFAULT_TITLE_LABELS[locale ?? "en"] ?? DEFAULT_TITLE_LABELS.en;
+}
+
 /**
  * Build an HTML header with the calendar title and optional eventky link.
  * Returns empty string if showCalendarTitle is disabled.
@@ -541,18 +583,20 @@ export function buildEventkyEventUrl(eventUri: string, baseUrl: string): string 
 export function buildCalendarHeader(
 	config: MeetupsConfig,
 	selectedCalendar: number | "all",
+	locale?: string,
 ): string {
 	if (config.showCalendarTitle === false) return "";
 	const baseUrl = config.eventkyBaseUrl || "https://eventky.app";
+	const fallbackTitle = defaultTitleFor(locale);
 
 	if (selectedCalendar === "all") {
-		return `<b>${escapeHtml(config.title || "Upcoming Events")}</b>\n\n`;
+		return `<b>${escapeHtml(config.title || fallbackTitle)}</b>\n\n`;
 	}
 
 	const cal = config.calendars[selectedCalendar];
 	if (!cal) return "";
 
-	const name = escapeHtml(cal.name || config.title || "Upcoming Events");
+	const name = escapeHtml(cal.name || config.title || fallbackTitle);
 	const url = buildEventkyCalendarUrl(cal.uri, baseUrl);
 
 	if (url) {

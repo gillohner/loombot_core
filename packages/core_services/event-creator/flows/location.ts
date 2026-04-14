@@ -7,6 +7,7 @@ import type { EventCreatorState } from "../types.ts";
 import { escapeHtml } from "../utils/formatting.ts";
 import { showOptionalMenu } from "./optional_menu.ts";
 import { validateLocationName } from "../utils/validation.ts";
+import { tev, tfor } from "../utils/i18n.ts";
 
 interface NominatimResult {
 	place_id: number;
@@ -18,22 +19,29 @@ interface NominatimResult {
 	type: string;
 }
 
+type EvLike = CallbackEvent | MessageEvent;
+
 /**
  * Show the location type selection menu (Physical vs Online)
  */
-export function showLocationTypeMenu(st: EventCreatorState) {
+export function showLocationTypeMenu(st: EventCreatorState, ev: EvLike) {
+	const t = tfor(ev.language);
 	const keyboard = UIBuilder.keyboard()
 		.namespace(SERVICE_ID)
-		.callback("📍 Physical Location", "location:type:physical")
+		.callback(t("location.button_physical"), "location:type:physical")
 		.row()
-		.callback("💻 Online Meeting", "location:type:online")
+		.callback(t("location.button_online"), "location:type:online")
 		.row()
-		.callback("← Back to Menu", "location:back");
+		.callback(t("menu.back_to_menu"), "location:back");
 
-	return uiKeyboard(keyboard.build(), "📍 <b>Add Location</b>\n\nWhat type of location?", {
-		state: state.replace(st),
-		options: { replaceGroup: LOC_REPLACE_GROUP },
-	});
+	return uiKeyboard(
+		keyboard.build(),
+		t("location.title") + "\n\n" + t("location.type_prompt"),
+		{
+			state: state.replace(st),
+			options: { replaceGroup: LOC_REPLACE_GROUP },
+		},
+	);
 }
 
 /**
@@ -41,16 +49,16 @@ export function showLocationTypeMenu(st: EventCreatorState) {
  */
 export function handleLocationTypeSelect(ev: CallbackEvent, locationType: string) {
 	const st = (ev.state ?? {}) as EventCreatorState;
+	const t = tfor(ev.language);
 
 	if (locationType === "physical") {
 		const keyboard = UIBuilder.keyboard()
 			.namespace(SERVICE_ID)
-			.callback("← Cancel", "location:back");
+			.callback(t("location.cancel_button"), "location:back");
 
 		return uiKeyboard(
 			keyboard.build(),
-			"📍 <b>Physical Location</b>\n\n" +
-				'Enter the venue name or address to search (or type "skip" to cancel):',
+			t("location.physical_title") + "\n\n" + t("location.physical_prompt"),
 			{
 				state: state.replace({
 					...st,
@@ -64,13 +72,12 @@ export function handleLocationTypeSelect(ev: CallbackEvent, locationType: string
 	if (locationType === "online") {
 		const keyboard = UIBuilder.keyboard()
 			.namespace(SERVICE_ID)
-			.callback("← Cancel", "location:back");
+			.callback(t("location.cancel_button"), "location:back");
 
 		return uiKeyboard(
 			keyboard.build(),
-			"💻 <b>Online Meeting</b>\n\n" +
-				"Enter the meeting URL (e.g., https://meet.google.com/... or https://zoom.us/...)\n\n" +
-				'Or type "skip" to cancel:',
+			t("location.online_title") + "\n\n" + t("location.online_prompt") + "\n\n" +
+				t("location.online_prompt_skip"),
 			{
 				state: state.replace({
 					...st,
@@ -81,32 +88,33 @@ export function handleLocationTypeSelect(ev: CallbackEvent, locationType: string
 		);
 	}
 
-	return showLocationTypeMenu(st);
+	return showLocationTypeMenu(st, ev);
 }
 
 /**
  * Show confirmation after location selection
  */
-function showLocationConfirmation(st: EventCreatorState) {
+function showLocationConfirmation(st: EventCreatorState, ev: EvLike) {
 	const loc = st.location!;
 	const isOnline = loc.location_type === "ONLINE";
 	const retryAction = isOnline ? "location:type:online" : "location:type:physical";
+	const t = tfor(ev.language);
 
 	const keyboard = UIBuilder.keyboard()
 		.namespace(SERVICE_ID)
-		.callback("✅ Confirm", "location:confirm")
+		.callback(t("location.button_confirm"), "location:confirm")
 		.row()
-		.callback("🔍 Search Again", retryAction)
+		.callback(t("location.button_search_again"), retryAction)
 		.row()
-		.callback("← Back to Menu", "location:back");
+		.callback(t("menu.back_to_menu"), "location:back");
 
 	let text: string;
 	if (isOnline) {
-		text = `💻 <b>Online Meeting Selected</b>\n\n<b>URL:</b> ${
-			escapeHtml(loc.structured_data || "")
-		}`;
+		text = t("location.online_selected_title") + "\n\n" +
+			t("location.online_selected_url", { url: escapeHtml(loc.structured_data || "") });
 	} else {
-		text = `📍 <b>Location Selected</b>\n\n<b>Name:</b> ${escapeHtml(loc.name || "")}`;
+		text = t("location.physical_selected_title") + "\n\n" +
+			t("location.physical_selected_name", { name: escapeHtml(loc.name || "") });
 		if (loc.structured_data) {
 			text += `\n🔗 <a href="${escapeHtml(loc.structured_data)}">OpenStreetMap</a>`;
 		}
@@ -114,7 +122,7 @@ function showLocationConfirmation(st: EventCreatorState) {
 			text += `\n📍 ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
 		}
 	}
-	text += "\n\nConfirm this location?";
+	text += "\n\n" + t("location.confirm_question");
 
 	return uiKeyboard(keyboard.build(), text, {
 		state: state.replace(st),
@@ -130,16 +138,17 @@ export function handleLocationSelect(ev: CallbackEvent, index: string) {
 	const results = (st as Record<string, unknown>)._nominatimResults as
 		| NominatimResult[]
 		| undefined;
+	const t = tfor(ev.language);
 
 	const idx = parseInt(index, 10);
 	if (!results || isNaN(idx) || idx < 0 || idx >= results.length) {
 		const keyboard = UIBuilder.keyboard()
 			.namespace(SERVICE_ID)
-			.callback("🔍 Search Again", "location:type:physical")
+			.callback(t("location.button_search_again_short"), "location:type:physical")
 			.row()
-			.callback("← Back to Menu", "location:back");
+			.callback(t("menu.back_to_menu"), "location:back");
 
-		return uiKeyboard(keyboard.build(), "Invalid selection. Please try again.", {
+		return uiKeyboard(keyboard.build(), t("location.invalid_selection"), {
 			state: state.replace(st),
 			options: { replaceGroup: LOC_REPLACE_GROUP },
 		});
@@ -158,7 +167,7 @@ export function handleLocationSelect(ev: CallbackEvent, index: string) {
 	};
 	delete (updatedState as Record<string, unknown>).waitingFor;
 
-	return showLocationConfirmation(updatedState);
+	return showLocationConfirmation(updatedState, ev);
 }
 
 /**
@@ -167,13 +176,14 @@ export function handleLocationSelect(ev: CallbackEvent, index: string) {
 export async function handleLocationSearchInput(
 	text: string,
 	st: EventCreatorState,
-	_ev: MessageEvent,
+	ev: MessageEvent,
 ) {
-	const validation = validateLocationName(text);
+	const t = tfor(ev.language);
+	const validation = validateLocationName(text, ev.language);
 	if (!validation.valid) {
 		const keyboard = UIBuilder.keyboard()
 			.namespace(SERVICE_ID)
-			.callback("← Cancel", "location:back");
+			.callback(t("location.cancel_button"), "location:back");
 
 		return uiKeyboard(keyboard.build(), validation.error!, {
 			state: state.replace(st),
@@ -205,11 +215,14 @@ export async function handleLocationSearchInput(
 			// No results — offer to use as plain name or retry
 			const keyboard = UIBuilder.keyboard()
 				.namespace(SERVICE_ID)
-				.callback(`📝 Use "${text.substring(0, 30)}" as name`, "location:use_name")
+				.callback(
+					t("location.button_use_as_name", { text: text.substring(0, 30) }),
+					"location:use_name",
+				)
 				.row()
-				.callback("🔍 Search again", "location:type:physical")
+				.callback(t("location.button_search_again_short"), "location:type:physical")
 				.row()
-				.callback("← Back to Menu", "location:back");
+				.callback(t("menu.back_to_menu"), "location:back");
 
 			const updatedState = {
 				...st,
@@ -219,7 +232,8 @@ export async function handleLocationSearchInput(
 
 			return uiKeyboard(
 				keyboard.build(),
-				`📍 No results found for "${text}".\n\nYou can use it as a plain location name or search again.`,
+				t("location.no_results_title", { text }) + "\n\n" +
+					t("location.no_results_prompt"),
 				{
 					state: state.replace(updatedState),
 					options: { replaceGroup: LOC_REPLACE_GROUP },
@@ -239,9 +253,12 @@ export async function handleLocationSearchInput(
 			keyboard.callback(`📍 ${label}`, `location:select:${i}`).row();
 		}
 		keyboard
-			.callback(`📝 Use "${text.substring(0, 30)}" as name`, "location:use_name")
+			.callback(
+				t("location.button_use_as_name", { text: text.substring(0, 30) }),
+				"location:use_name",
+			)
 			.row()
-			.callback("← Back to Menu", "location:back");
+			.callback(t("menu.back_to_menu"), "location:back");
 
 		// Store results in state for selection
 		const updatedState = {
@@ -253,7 +270,8 @@ export async function handleLocationSearchInput(
 
 		return uiKeyboard(
 			keyboard.build(),
-			`📍 <b>Search Results</b> for "${escapeHtml(text)}"\n\nSelect a location:`,
+			t("location.search_results_header", { text: escapeHtml(text) }) + "\n\n" +
+				t("location.search_results_prompt"),
 			{
 				state: state.replace(updatedState),
 				options: { replaceGroup: LOC_REPLACE_GROUP },
@@ -271,7 +289,7 @@ export async function handleLocationSearchInput(
 		delete (updatedState as Record<string, unknown>)._nominatimResults;
 		delete (updatedState as Record<string, unknown>)._pendingLocationName;
 
-		return showOptionalMenu(updatedState, _ev, { cleanupGroup: LOC_REPLACE_GROUP });
+		return showOptionalMenu(updatedState, ev, { cleanupGroup: LOC_REPLACE_GROUP });
 	}
 }
 
@@ -283,7 +301,7 @@ export function handleUseAsName(ev: CallbackEvent) {
 	const name = (st as Record<string, unknown>)._pendingLocationName as string | undefined;
 
 	if (!name) {
-		return showLocationTypeMenu(st);
+		return showLocationTypeMenu(st, ev);
 	}
 
 	const updatedState = { ...st };
@@ -293,7 +311,7 @@ export function handleUseAsName(ev: CallbackEvent) {
 	};
 	delete (updatedState as Record<string, unknown>).waitingFor;
 
-	return showLocationConfirmation(updatedState);
+	return showLocationConfirmation(updatedState, ev);
 }
 
 /**
@@ -332,47 +350,40 @@ export function handleLocationBack(ev: CallbackEvent) {
 export function handleOnlineUrlInput(
 	text: string,
 	st: EventCreatorState,
-	_ev: MessageEvent,
+	ev: MessageEvent,
 ) {
+	const t = tfor(ev.language);
 	// Basic URL validation
 	try {
 		const url = new URL(text);
 		if (!url.protocol.startsWith("http")) {
 			const keyboard = UIBuilder.keyboard()
 				.namespace(SERVICE_ID)
-				.callback("← Cancel", "location:back");
+				.callback(t("location.cancel_button"), "location:back");
 
-			return uiKeyboard(
-				keyboard.build(),
-				"Please enter a valid URL starting with http:// or https://",
-				{
-					state: state.replace(st),
-					options: { replaceGroup: LOC_REPLACE_GROUP },
-				},
-			);
+			return uiKeyboard(keyboard.build(), t("location.invalid_url_protocol"), {
+				state: state.replace(st),
+				options: { replaceGroup: LOC_REPLACE_GROUP },
+			});
 		}
 	} catch {
 		const keyboard = UIBuilder.keyboard()
 			.namespace(SERVICE_ID)
-			.callback("← Cancel", "location:back");
+			.callback(t("location.cancel_button"), "location:back");
 
-		return uiKeyboard(
-			keyboard.build(),
-			"That doesn't look like a valid URL. Please enter a meeting link:",
-			{
-				state: state.replace(st),
-				options: { replaceGroup: LOC_REPLACE_GROUP },
-			},
-		);
+		return uiKeyboard(keyboard.build(), t("location.invalid_url_generic"), {
+			state: state.replace(st),
+			options: { replaceGroup: LOC_REPLACE_GROUP },
+		});
 	}
 
 	const updatedState = { ...st };
 	updatedState.location = {
-		name: "Online Meeting",
+		name: tev(ev, "location.online_name_default"),
 		location_type: "ONLINE",
 		structured_data: text,
 	};
 	delete (updatedState as Record<string, unknown>).waitingFor;
 
-	return showLocationConfirmation(updatedState);
+	return showLocationConfirmation(updatedState, ev);
 }

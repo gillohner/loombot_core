@@ -20,6 +20,7 @@ import {
 } from "../flows/location.ts";
 import { handleOptionalMenuAction, showOptionalMenu } from "../flows/optional_menu.ts";
 import { handleSubmit } from "../flows/submit.ts";
+import { tev } from "../utils/i18n.ts";
 
 export function handleCallback(ev: CallbackEvent) {
 	const data = ev.data ?? "";
@@ -41,7 +42,7 @@ export function handleCallback(ev: CallbackEvent) {
 		return handleEditCallback(ev, data);
 	}
 
-	return reply("Unknown action. Please start over.", {
+	return reply(tev(ev, "menu.unknown_action"), {
 		state: state.clear(),
 	});
 }
@@ -66,13 +67,13 @@ function handleMenuCallback(ev: CallbackEvent, data: string) {
 			return handleSubmit(ev);
 
 		case "cancel":
-			return reply("❌ Event creation cancelled.", {
+			return reply(tev(ev, "menu.cancelled"), {
 				state: state.clear(),
 				deleteTrigger: true,
 			});
 
 		default:
-			return reply("Unknown menu action.", { state: state.clear() });
+			return reply(tev(ev, "menu.unknown_menu_action"), { state: state.clear() });
 	}
 }
 

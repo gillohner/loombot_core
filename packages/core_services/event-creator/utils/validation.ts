@@ -1,5 +1,6 @@
 // packages/core_services/event-creator/utils/validation.ts
-// Field validation utilities
+// Field validation utilities. Error messages are translated via the event
+// locale — callers pass the locale (from `ev.language`) into each function.
 
 import {
 	DATE_REGEX,
@@ -8,57 +9,55 @@ import {
 	MAX_TITLE_LENGTH,
 	TIME_REGEX,
 } from "../constants.ts";
+import { tfor } from "./i18n.ts";
 
 export interface ValidationResult {
 	valid: boolean;
 	error?: string;
 }
 
-export function validateTitle(text: string): ValidationResult {
+export function validateTitle(text: string, locale?: string): ValidationResult {
+	const t = tfor(locale);
 	if (!text || text.trim().length === 0) {
-		return { valid: false, error: "Title cannot be empty." };
+		return { valid: false, error: t("validation.title_empty") };
 	}
 	if (text.length > MAX_TITLE_LENGTH) {
 		return {
 			valid: false,
-			error: `Title is too long. Maximum ${MAX_TITLE_LENGTH} characters.`,
+			error: t("validation.title_too_long", { max: MAX_TITLE_LENGTH }),
 		};
 	}
 	return { valid: true };
 }
 
-export function validateDescription(text: string): ValidationResult {
+export function validateDescription(text: string, locale?: string): ValidationResult {
+	const t = tfor(locale);
 	if (text.length > MAX_DESCRIPTION_LENGTH) {
 		return {
 			valid: false,
-			error: `Description is too long. Maximum ${MAX_DESCRIPTION_LENGTH} characters.`,
+			error: t("validation.description_too_long", { max: MAX_DESCRIPTION_LENGTH }),
 		};
 	}
 	return { valid: true };
 }
 
-export function validateDate(text: string): ValidationResult {
+export function validateDate(text: string, locale?: string): ValidationResult {
+	const t = tfor(locale);
 	if (!DATE_REGEX.test(text)) {
-		return {
-			valid: false,
-			error: "Invalid date format. Please use DD.MM.YYYY\n\nExample: 23.04.2026",
-		};
+		return { valid: false, error: t("validation.date_format_invalid") };
 	}
 
 	const parts = parseDateParts(text);
 	if (!parts) {
-		return {
-			valid: false,
-			error: "Invalid date format. Please use DD.MM.YYYY\n\nExample: 23.04.2026",
-		};
+		return { valid: false, error: t("validation.date_format_invalid") };
 	}
 
 	const { day, month, year } = parts;
 	if (month < 1 || month > 12) {
-		return { valid: false, error: "Invalid month. Must be 1-12." };
+		return { valid: false, error: t("validation.date_month_invalid") };
 	}
 	if (day < 1 || day > 31) {
-		return { valid: false, error: "Invalid day. Must be 1-31." };
+		return { valid: false, error: t("validation.date_day_invalid") };
 	}
 
 	// Check actual validity by constructing a Date
@@ -68,7 +67,7 @@ export function validateDate(text: string): ValidationResult {
 		dateObj.getMonth() !== month - 1 ||
 		dateObj.getDate() !== day
 	) {
-		return { valid: false, error: "Invalid date. Check day/month combination." };
+		return { valid: false, error: t("validation.date_combination_invalid") };
 	}
 
 	// Validate the date is in the future
@@ -76,10 +75,7 @@ export function validateDate(text: string): ValidationResult {
 	today.setHours(0, 0, 0, 0);
 
 	if (dateObj < today) {
-		return {
-			valid: false,
-			error: "The event date must be in the future.",
-		};
+		return { valid: false, error: t("validation.date_in_past") };
 	}
 
 	return { valid: true };
@@ -113,30 +109,26 @@ export function normalizeDate(input: string): string | null {
 	return `${dd}.${mm}.${parts.year}`;
 }
 
-export function validateTime(text: string): ValidationResult {
+export function validateTime(text: string, locale?: string): ValidationResult {
+	const t = tfor(locale);
 	if (!TIME_REGEX.test(text)) {
-		return {
-			valid: false,
-			error: "Invalid time format. Please use HH:MM (24-hour)\n\nExample: 19:30",
-		};
+		return { valid: false, error: t("validation.time_format_invalid") };
 	}
 
 	const [hours, minutes] = text.split(":").map(Number);
 	if (hours! > 23 || minutes! > 59) {
-		return {
-			valid: false,
-			error: "Invalid time. Hours must be 0-23, minutes 0-59.",
-		};
+		return { valid: false, error: t("validation.time_range_invalid") };
 	}
 
 	return { valid: true };
 }
 
-export function validateLocationName(text: string): ValidationResult {
+export function validateLocationName(text: string, locale?: string): ValidationResult {
+	const t = tfor(locale);
 	if (text.length > MAX_LOCATION_NAME_LENGTH) {
 		return {
 			valid: false,
-			error: `Location name is too long. Maximum ${MAX_LOCATION_NAME_LENGTH} characters.`,
+			error: t("validation.location_too_long", { max: MAX_LOCATION_NAME_LENGTH }),
 		};
 	}
 	return { valid: true };
@@ -147,17 +139,16 @@ export function validateEndTime(
 	startTime: string,
 	endDate: string,
 	endTime: string,
+	locale?: string,
 ): ValidationResult {
+	const t = tfor(locale);
 	const startIso = dateToIso(startDate);
 	const endIso = dateToIso(endDate);
 	const start = new Date(`${startIso}T${startTime}:00`);
 	const end = new Date(`${endIso}T${endTime}:00`);
 
 	if (end <= start) {
-		return {
-			valid: false,
-			error: "End time must be after start time.",
-		};
+		return { valid: false, error: t("validation.end_time_before_start") };
 	}
 
 	return { valid: true };
