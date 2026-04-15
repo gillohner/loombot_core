@@ -14,14 +14,27 @@ const de = {
 		ok: "✅ Titel: <b>{{title}}</b>",
 	},
 	slot: {
-		prompt_start_date:
-			"📝 <b>Slot {{index}}/{{max}}</b> — Startdatum? (TT.MM.JJJJ)\n\nBeispiel: 23.04.2026",
-		prompt_start_time: "⏰ Startzeit? (HH:MM, 24h)\n\nBeispiel: 19:30",
-		prompt_end_date:
-			"📝 Und das Enddatum? (TT.MM.JJJJ)\n\nFalls der Slot am gleichen Tag ist, sende das Startdatum erneut.",
-		prompt_end_time: "⏰ Endzeit? (HH:MM, 24h)",
 		added:
 			"✅ Slot {{index}} hinzugefügt: <b>{{slot}}</b>\n\nDu hast bisher {{count}} Slot(s). Füge weitere hinzu oder veröffentliche die Umfrage.",
+	},
+	pick: {
+		date_header: "📅 <b>Slot {{index}}/{{max}}</b> — wähle ein Datum oder tippe eins (TT.MM.JJJJ):",
+		time_header: "⏰ <b>{{date}}</b> — wähle eine Startzeit oder tippe eine (HH:MM):",
+		duration_header:
+			"⏱️ <b>{{date}} {{time}}</b> — wie lange?\n\nWähle eine Dauer oder nutze <i>Andere</i> für eine eigene Endzeit.",
+		today: "Heute",
+		tomorrow: "Morgen",
+		other_date: "✏️ Anderes Datum…",
+		other_time: "✏️ Andere Zeit…",
+		other_duration: "✏️ Andere Endzeit…",
+		until_late: "Bis 22:00",
+		multi_day: "Mehrere Tage…",
+		cancel: "❌ Abbrechen",
+		type_date:
+			"📝 Sende das Datum als TT.MM.JJJJ (oder /{{command}} um neu zu starten).\n\nBeispiel: 23.04.2026",
+		type_time: "⏰ Sende die Startzeit als HH:MM (24h).\n\nBeispiel: 19:30",
+		type_end_time: "⏰ Sende die Endzeit als HH:MM (24h) am selben Tag.",
+		type_end_date: "📝 Sende das Enddatum als TT.MM.JJJJ.\n\nBeispiel: 24.04.2026",
 	},
 	review: {
 		header: "📋 <b>Deine Umfrage prüfen</b>",

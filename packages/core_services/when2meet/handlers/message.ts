@@ -1,13 +1,16 @@
 // packages/core_services/when2meet/handlers/message.ts
-// Routes text input to the right phase of the organizer flow.
+// Routes text input to the right phase of the organizer flow. Each picker
+// phase has a corresponding typed-fallback handler so the flow still works
+// if the user types instead of tapping a button.
 
 import { type MessageEvent, reply, state } from "@sdk/mod.ts";
 import type { When2meetState } from "../types.ts";
 import {
-	handleSlotEndDate,
-	handleSlotEndTime,
-	handleSlotStartDate,
-	handleSlotStartTime,
+	handleDateText,
+	handleDurationText,
+	handleEndDateText,
+	handleEndTimeText,
+	handleTimeText,
 	handleTitleInput,
 	showReviewMenu,
 } from "../flows/propose.ts";
@@ -21,14 +24,16 @@ export function handleMessage(ev: MessageEvent) {
 	switch (st.phase) {
 		case "title":
 			return handleTitleInput(text, st, ev);
-		case "slot_start_date":
-			return handleSlotStartDate(text, st, ev);
-		case "slot_start_time":
-			return handleSlotStartTime(text, st, ev);
-		case "slot_end_date":
-			return handleSlotEndDate(text, st, ev);
-		case "slot_end_time":
-			return handleSlotEndTime(text, st, ev);
+		case "slot_date_pick":
+			return handleDateText(text, st, ev);
+		case "slot_time_pick":
+			return handleTimeText(text, st, ev);
+		case "slot_duration_pick":
+			return handleDurationText(text, st, ev);
+		case "slot_end_date_text":
+			return handleEndDateText(text, st, ev);
+		case "slot_end_time_text":
+			return handleEndTimeText(text, st, ev);
 		case "review":
 			return showReviewMenu(st, ev);
 		default:

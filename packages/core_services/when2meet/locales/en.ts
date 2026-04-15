@@ -14,14 +14,27 @@ const en = {
 		ok: "✅ Title: <b>{{title}}</b>",
 	},
 	slot: {
-		prompt_start_date:
-			"📝 <b>Slot {{index}}/{{max}}</b> — what's the start date? (DD.MM.YYYY)\n\nExample: 23.04.2026",
-		prompt_start_time: "⏰ What's the start time? (HH:MM, 24h)\n\nExample: 19:30",
-		prompt_end_date:
-			"📝 And the end date? (DD.MM.YYYY)\n\nIf the slot is on the same day, just re-send the start date.",
-		prompt_end_time: "⏰ What's the end time? (HH:MM, 24h)",
 		added:
 			"✅ Slot {{index}} added: <b>{{slot}}</b>\n\nYou have {{count}} slot(s) so far. Add another, or publish when ready.",
+	},
+	pick: {
+		date_header: "📅 <b>Slot {{index}}/{{max}}</b> — pick a date, or type one (DD.MM.YYYY):",
+		time_header: "⏰ <b>{{date}}</b> — pick a start time, or type one (HH:MM):",
+		duration_header:
+			"⏱️ <b>{{date}} {{time}}</b> — how long?\n\nPick a duration, or use <i>Other</i> to type a custom end time.",
+		today: "Today",
+		tomorrow: "Tomorrow",
+		other_date: "✏️ Other date…",
+		other_time: "✏️ Other time…",
+		other_duration: "✏️ Custom end time…",
+		until_late: "Until 22:00",
+		multi_day: "Multi-day…",
+		cancel: "❌ Cancel",
+		type_date:
+			"📝 Send the date as DD.MM.YYYY (or send /{{command}} to start over).\n\nExample: 23.04.2026",
+		type_time: "⏰ Send the start time as HH:MM (24h).\n\nExample: 19:30",
+		type_end_time: "⏰ Send the end time as HH:MM (24h) for the same day.",
+		type_end_date: "📝 Send the end date as DD.MM.YYYY.\n\nExample: 24.04.2026",
 	},
 	review: {
 		header: "📋 <b>Review your poll</b>",

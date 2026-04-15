@@ -19,10 +19,11 @@ export interface PartialSlot {
 
 export type When2meetPhase =
 	| "title"
-	| "slot_start_date"
-	| "slot_start_time"
-	| "slot_end_date"
-	| "slot_end_time"
+	| "slot_date_pick"
+	| "slot_time_pick"
+	| "slot_duration_pick"
+	| "slot_end_date_text"
+	| "slot_end_time_text"
 	| "review";
 
 export interface When2meetState {
