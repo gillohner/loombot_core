@@ -4,8 +4,24 @@
 // rows carry the candidate time slots. Votes are (poll, option, user) rows.
 // Polls survive bot restarts because everything lives on disk — a vote clicked
 // an hour after a restart still lands correctly.
+//
+// IDs are short Crockford-base32 strings (10 chars, ~50 bits of entropy)
+// rather than UUIDs because they travel in Telegram inline-keyboard
+// callback_data, which is capped at 64 bytes. A `w2m:vote:<poll>:<option>`
+// callback with two UUIDs overflows the cap; two 10-char IDs fit easily.
 
 import { getDb } from "@core/config/store.ts";
+
+const ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32
+const ID_LENGTH = 10;
+
+function shortId(): string {
+	const bytes = new Uint8Array(ID_LENGTH);
+	crypto.getRandomValues(bytes);
+	let out = "";
+	for (const b of bytes) out += ID_ALPHABET[b % 32];
+	return out;
+}
 
 export interface Poll {
 	id: string;
@@ -59,7 +75,7 @@ export interface CreatePollParams {
 
 export function createPoll(params: CreatePollParams): PollWithTally {
 	const db = getDb();
-	const id = crypto.randomUUID();
+	const id = shortId();
 	const now = Date.now();
 	db.query(
 		`INSERT INTO polls (id, chat_id, creator_user_id, creator_display_name, title, message_id, status, created_at)
@@ -69,7 +85,7 @@ export function createPoll(params: CreatePollParams): PollWithTally {
 	const options: PollOption[] = [];
 	for (let i = 0; i < params.slots.length; i++) {
 		const slot = params.slots[i];
-		const optionId = crypto.randomUUID();
+		const optionId = shortId();
 		db.query(
 			`INSERT INTO poll_options (id, poll_id, start_date, start_time, end_date, end_time, position)
 			 VALUES (?, ?, ?, ?, ?, ?, ?)`,

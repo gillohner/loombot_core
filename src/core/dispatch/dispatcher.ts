@@ -259,6 +259,7 @@ export async function dispatch(evt: DispatchEvent): Promise<DispatcherResult> {
 						routeMeta: route.meta,
 						datasets: route.datasets,
 						botPublicKey: pubkyWriter.getPublicKey() ?? undefined,
+						locale: getLocale(),
 					},
 					manifest: { schemaVersion: 1 },
 				};
