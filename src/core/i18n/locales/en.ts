@@ -194,6 +194,20 @@ const en = {
 		pubky_queue_failed: "⚠️ Failed to submit. Please try again later.",
 		ui_choose_option: "Choose an option:",
 	},
+	polls: {
+		already_open:
+			"⚠️ This chat already has an open availability poll. Close it before starting a new one.",
+		need_slots: "⚠️ A poll needs at least two time slots.",
+		publish_failed: "⚠️ Couldn't publish the poll. Please try again later.",
+		closed_toast: "Vote closed.",
+		close_not_authorized: "Only the poll organizer or a chat admin can close this vote.",
+		vote_rejected_closed: "This poll is already closed.",
+		poll_not_found: "Poll not found.",
+		event_creator_unavailable:
+			"⚠️ The event-creation service isn't enabled in this chat, so I can't create an event from this poll.",
+		event_seed_prompt:
+			"📝 Great — let's create that event with the winning slot.\n\nWhat's the event title?",
+	},
 	pubky: {
 		button_approve: "✅ Approve",
 		button_reject: "❌ Reject",

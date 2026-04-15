@@ -9,6 +9,7 @@ import { userIsAdmin } from "@middleware/admin.ts";
 import { pubkyWriter } from "@core/pubky/writer.ts";
 import { rememberChat } from "@core/config/store.ts";
 import { registerConfigUi, routeConfigTextInput, sendMainMenu } from "@middleware/config_ui/mod.ts";
+import { registerW2MCallbacks } from "@middleware/polls.ts";
 import { t } from "@core/i18n/mod.ts";
 
 const CORE_PUBLIC_COMMANDS: string[] = ["start"];
@@ -86,6 +87,11 @@ export function buildMiddleware() {
 
 	// /config inline-keyboard handlers.
 	registerConfigUi(composer);
+
+	// when2meet poll callback handlers (vote / close / create-event).
+	// Registered before the generic service dispatch so `w2m:*` callback
+	// data is handled host-side and never touches the sandbox.
+	registerW2MCallbacks(composer);
 
 	composer.on(
 		"message:text",
@@ -178,7 +184,7 @@ export function buildMiddleware() {
 	// Generic service callback queries
 	composer.on("callback_query:data", async (ctx: Context) => {
 		const data = ctx.callbackQuery?.data ?? "";
-		if (data.startsWith("cfg:") || data.startsWith("pubky:")) {
+		if (data.startsWith("cfg:") || data.startsWith("pubky:") || data.startsWith("w2m:")) {
 			// Handled above; stop fallthrough.
 			return;
 		}

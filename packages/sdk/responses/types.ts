@@ -82,6 +82,24 @@ export interface PubkyWriteMessage extends BaseReply {
 	onRejectionMessage?: string; // Message to send user on rejection
 }
 
+/**
+ * Publish a when2meet availability poll. The sandboxed organizer flow emits
+ * this when the user clicks the "publish" button; the host adapter writes the
+ * poll + options to SQLite, posts the initial poll message, and records the
+ * message id. All subsequent vote / close / create_event interactions are
+ * routed host-side via `w2m:*` callback prefixes.
+ */
+export interface PollPublishMessage extends BaseReply {
+	kind: "poll_publish";
+	title: string;
+	slots: Array<{
+		startDate: string; // DD.MM.YYYY
+		startTime: string; // HH:MM
+		endDate: string; // DD.MM.YYYY
+		endTime: string; // HH:MM
+	}>;
+}
+
 export type ServiceResponse =
 	| ReplyMessage
 	| EditMessage
@@ -95,6 +113,7 @@ export type ServiceResponse =
 	| LocationMessage
 	| ContactMessage
 	| UIMessage
-	| PubkyWriteMessage;
+	| PubkyWriteMessage
+	| PollPublishMessage;
 
 export type { StateDirective };

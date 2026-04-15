@@ -45,6 +45,10 @@ export const SERVICE_REGISTRY: Record<string, ServiceRegistryEntry> = {
 		net: ["nominatim.openstreetmap.org"],
 		requiresPubky: true,
 	},
+	when2meet: {
+		entry: "./packages/core_services/when2meet/service.ts",
+		kind: "command_flow",
+	},
 	triggerwords: {
 		entry: "./packages/core_services/triggerwords/service.ts",
 		kind: "listener",

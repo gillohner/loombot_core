@@ -31,10 +31,23 @@ export function handleRequiredFieldInput(ev: MessageEvent) {
 	}
 }
 
-function handleTitleInput(text: string, _st: EventCreatorState, ev: MessageEvent) {
+function handleTitleInput(text: string, st: EventCreatorState, ev: MessageEvent) {
 	const validation = validateTitle(text, ev.language);
 	if (!validation.valid) {
 		return reply(validation.error!);
+	}
+
+	// Seeded from when2meet: startDate + startTime are already populated
+	// (and optionally endDate/endTime). After accepting the title, skip the
+	// date/time prompts and jump straight to the optional menu.
+	if (st.startDate && st.startTime) {
+		const updated: EventCreatorState = {
+			...st,
+			title: text,
+			phase: "optional_menu",
+			requirementStep: undefined,
+		};
+		return showOptionalMenu(updated, ev);
 	}
 
 	return reply(

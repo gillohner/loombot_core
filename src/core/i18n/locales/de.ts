@@ -193,6 +193,21 @@ const de = {
 		pubky_queue_failed: "⚠️ Einreichung fehlgeschlagen. Bitte später erneut versuchen.",
 		ui_choose_option: "Wähle eine Option:",
 	},
+	polls: {
+		already_open:
+			"⚠️ In diesem Chat läuft bereits eine Terminumfrage. Schliesse sie, bevor du eine neue startest.",
+		need_slots: "⚠️ Eine Umfrage braucht mindestens zwei Terminvorschläge.",
+		publish_failed: "⚠️ Umfrage konnte nicht veröffentlicht werden. Bitte später erneut versuchen.",
+		closed_toast: "Abstimmung beendet.",
+		close_not_authorized:
+			"Nur der Organisator der Umfrage oder ein Chat-Admin kann die Abstimmung schliessen.",
+		vote_rejected_closed: "Diese Umfrage ist bereits geschlossen.",
+		poll_not_found: "Umfrage nicht gefunden.",
+		event_creator_unavailable:
+			"⚠️ Der Event-Ersteller-Service ist in diesem Chat nicht aktiviert. Ich kann aus dieser Umfrage kein Event erstellen.",
+		event_seed_prompt:
+			"📝 Super — erstellen wir das Event mit dem Gewinner-Slot.\n\nWie soll das Event heissen?",
+	},
 	pubky: {
 		button_approve: "✅ Genehmigen",
 		button_reject: "❌ Ablehnen",

@@ -51,6 +51,19 @@ features:
       message: "Hey there 👋"
       disableLinkPreview: true
 
+  when2meet:
+    # Availability poll. Any user can run /when2meet to propose 2-5 candidate
+    # slots. Group members vote via inline keyboard; the organizer or any chat
+    # admin can close the vote. If event_creator is also enabled in this chat,
+    # the closing user gets a button to turn the winning slot into an event.
+    service: when2meet
+    groups: true
+    dms: true
+    lock: false
+    config:
+      maxSlots: 5
+      messageTtl: 0
+
   meetups:
     # Disabled by default because no curated calendars are set yet.
     # Two ways to turn this on:

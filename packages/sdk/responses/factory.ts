@@ -11,6 +11,7 @@ import type {
 	LocationMessage,
 	NoneMessage,
 	PhotoMessage,
+	PollPublishMessage,
 	PubkyWriteMessage,
 	ReplyMessage,
 	ServiceResponse,
@@ -127,6 +128,27 @@ export const pubkyWrite = (
 			preview: opts.preview,
 			onApprovalMessage: opts.onApprovalMessage,
 			onRejectionMessage: opts.onRejectionMessage,
+		},
+		opts,
+	);
+
+export const pollPublish = (
+	payload: {
+		title: string;
+		slots: Array<{
+			startDate: string;
+			startTime: string;
+			endDate: string;
+			endTime: string;
+		}>;
+	},
+	opts?: BaseOpts,
+): PollPublishMessage =>
+	base(
+		"poll_publish",
+		{
+			title: payload.title,
+			slots: payload.slots,
 		},
 		opts,
 	);

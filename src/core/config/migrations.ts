@@ -192,6 +192,45 @@ export const migrations: Migration[] = [
 			}
 		},
 	},
+	{
+		id: 11,
+		name: "add_polls_tables",
+		up: (db: DB) => {
+			db.execute(`CREATE TABLE IF NOT EXISTS polls (
+				id TEXT PRIMARY KEY,
+				chat_id TEXT NOT NULL,
+				creator_user_id TEXT NOT NULL,
+				creator_display_name TEXT NOT NULL,
+				title TEXT NOT NULL,
+				message_id INTEGER,
+				status TEXT NOT NULL DEFAULT 'open',
+				created_at INTEGER NOT NULL,
+				closed_at INTEGER
+			);`);
+			db.execute(`CREATE TABLE IF NOT EXISTS poll_options (
+				id TEXT PRIMARY KEY,
+				poll_id TEXT NOT NULL,
+				start_date TEXT NOT NULL,
+				start_time TEXT NOT NULL,
+				end_date TEXT NOT NULL,
+				end_time TEXT NOT NULL,
+				position INTEGER NOT NULL
+			);`);
+			db.execute(`CREATE TABLE IF NOT EXISTS poll_votes (
+				poll_id TEXT NOT NULL,
+				option_id TEXT NOT NULL,
+				user_id TEXT NOT NULL,
+				display_name TEXT NOT NULL,
+				voted_at INTEGER NOT NULL,
+				PRIMARY KEY (poll_id, option_id, user_id)
+			);`);
+			db.execute(
+				`CREATE INDEX IF NOT EXISTS idx_polls_chat_status ON polls(chat_id, status);`,
+			);
+			db.execute(`CREATE INDEX IF NOT EXISTS idx_poll_options_poll ON poll_options(poll_id);`);
+			db.execute(`CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes(poll_id);`);
+		},
+	},
 ];
 
 export function runMigrations(db: DB): void {

@@ -8,7 +8,9 @@ import { convertCard, convertCarousel, convertKeyboard, convertMenu } from "./ui
 import { CONFIG } from "@core/config.ts";
 import { trackMessage } from "@core/ttl/store.ts";
 import { pubkyWriter } from "@core/pubky/writer.ts";
-import { t } from "@core/i18n/mod.ts";
+import { getLocale, t } from "@core/i18n/mod.ts";
+import { createPoll, hasOpenPoll, updateMessageId } from "@core/polls/store.ts";
+import { renderFreshPoll } from "@core/polls/renderer.ts";
 
 // Narrow helper type for edit options compatibility
 type BasicMessageOptions = Record<string, unknown> | undefined;
@@ -261,6 +263,51 @@ async function handleContact(ctx: Context, r: Extract<ServiceResponse, { kind: "
 	}
 }
 
+async function handlePollPublish(
+	ctx: Context,
+	r: Extract<ServiceResponse, { kind: "poll_publish" }>,
+): Promise<void> {
+	const chatId = String(ctx.chat?.id ?? "");
+	const userId = String(ctx.from?.id ?? "");
+	if (!chatId || !userId) {
+		log.warn("poll_publish.missing_ids", {});
+		return;
+	}
+	if (hasOpenPoll(chatId)) {
+		await ctx.reply(t("polls.already_open"));
+		return;
+	}
+	if (!r.slots || r.slots.length < 2) {
+		await ctx.reply(t("polls.need_slots"));
+		return;
+	}
+	const displayName = [ctx.from?.first_name, ctx.from?.last_name]
+		.filter(Boolean)
+		.join(" ")
+		.trim() || ctx.from?.username || String(ctx.from?.id ?? "?");
+	const created = createPoll({
+		chatId,
+		creatorUserId: userId,
+		creatorDisplayName: displayName,
+		title: r.title,
+		slots: r.slots,
+	});
+	const rendered = renderFreshPoll(created.poll, created.options, getLocale());
+	try {
+		const sent = await ctx.api.sendMessage(chatId, rendered.text, {
+			parse_mode: "HTML",
+			// @ts-ignore grammy's reply_markup type is strict
+			reply_markup: rendered.replyMarkup,
+		});
+		if (sent?.message_id) {
+			updateMessageId(created.poll.id, sent.message_id);
+		}
+	} catch (err) {
+		log.error("poll_publish.send_failed", { error: (err as Error).message });
+		await ctx.reply(t("polls.publish_failed"));
+	}
+}
+
 async function handlePubkyWrite(
 	ctx: Context,
 	r: Extract<ServiceResponse, { kind: "pubky_write" }>,
@@ -418,6 +465,9 @@ async function applyResponseInternal(ctx: Context, resp: ServiceResponse | null)
 			break;
 		case "pubky_write":
 			await handlePubkyWrite(ctx, resp);
+			break;
+		case "poll_publish":
+			await handlePollPublish(ctx, resp);
 			break;
 		case "none":
 		default:
