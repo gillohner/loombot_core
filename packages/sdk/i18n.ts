@@ -14,7 +14,12 @@ export function createI18n(messages: I18nMessages, fallbackLang = "en") {
 			} else return key;
 		}
 		if (typeof current !== "string") return key;
-		if (params) return current.replace(/\{\{(\w+)\}\}/g, (m, p) => params[p]?.toString() || m);
+		if (params) {
+			return current.replace(/\{\{(\w+)\}\}/g, (match, name) => {
+				const v = params[name];
+				return v === undefined || v === null ? match : String(v);
+			});
+		}
 		return current;
 	};
 }
